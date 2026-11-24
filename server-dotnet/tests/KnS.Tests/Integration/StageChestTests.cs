@@ -2,6 +2,7 @@ using System.Text.Json.Nodes;
 using KnS.Data.Repositories;
 using KnS.Game.Models;
 using KnS.Game.Stages;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace KnS.Tests.Integration;
 
@@ -201,6 +202,46 @@ public class StageChestTests(ServerFixture server)
         }, user);
         Assert.Equal(0, result["errno"]!.GetValue<long>());
         Assert.Equal(before, Branches(user));
+    }
+
+    [Fact]
+    public async Task Frozen_chapel_native_roll_counts_can_drop_four_chests_and_accumulate_repeated_slots()
+    {
+        using var scope = server.CreateScope();
+        var master = scope.ServiceProvider.GetRequiredService<MasterDataRepository>();
+        StageDropRollCounts counts = master.GetStageDropRollCounts(3250310);
+        Assert.Equal(new StageDropRollCounts(1, 3, 1, 1), counts);
+        StageGoldSettings? gold = master.GetStageGoldSettings(3250310);
+        Assert.NotNull(gold);
+        Assert.Equal(100, gold.GoldBoxMin);
+        Assert.Equal(900, gold.GoldBoxMax);
+
+        long user = (await server.CallGatewayAsync(51, new { hub_did = "stage-chest-frozen-chapel" }))["user_no"]!.GetValue<long>();
+        await server.CallGatewayAsync(60, new { }, user);
+        // Sequence (only calls with exclusiveMax > 1 consume): Group1 rolls=3 (2 -> 1+2=3),
+        // Group1 hits: 0 (slot0 110001), 90 (slot3 100181), 0 (slot0 110001 again);
+        // Group2 hit: 0 (slot10 Gold Box 1900015); Gold Box amount offset 58 -> 158 G.
+        var rng = new SequenceRandom([2, 0, 90, 0, 0, 58]);
+        StageRewardService rewards = Microsoft.Extensions.DependencyInjection.ActivatorUtilities
+            .CreateInstance<StageRewardService>(scope.ServiceProvider, rng);
+        DropItemList offers = rewards.OfferDrops(user, 3250310, 12);
+        Assert.Equal(4, offers.Chests.Count);
+        Assert.Equal(3, offers.Chests.Count(d => d.ItemId <= 199999));
+        Assert.Equal(1, offers.Chests.Count(d => d.ItemId == 1900015));
+        PendingDrops pending = rewards.GetPendingDrops(user);
+        EventOfferRecord goldBox = Assert.Single(pending.CountedItems, o => o.ItemId == 1900015);
+        Assert.Equal(158, goldBox.Count);
+    }
+
+    private sealed class SequenceRandom(long[] values) : KnS.Game.Randomness.IRandomSource
+    {
+        private int _index;
+        public long NextBelow(long exclusiveMax)
+        {
+            if (exclusiveMax <= 1) return 0;
+            long v = _index < values.Length ? values[_index++] : 0;
+            return Math.Clamp(v, 0, exclusiveMax - 1);
+        }
     }
 
     private const long Stage = 3001004; // Exploding Mountain

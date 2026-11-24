@@ -68,7 +68,7 @@ public sealed class RaidChallengeTests(ServerFixture server)
         Assert.Equal(1393000, server.Scalar($"SELECT gold FROM gameuser WHERE user_no={user}"));
         Assert.Equal(854, server.Scalar($"SELECT cash FROM gameuser WHERE user_no={user}"));
         Assert.Equal(7700, Goods(1900016));
-        Assert.Equal(634, server.Scalar($"SELECT stamina FROM player_stamina WHERE user_no={user}"));
+        Assert.Equal(557, server.Scalar($"SELECT stamina FROM player_stamina WHERE user_no={user}"));
         Assert.Equal(42, Goods(1900012));
         Assert.Equal(alliesBefore + 14, server.Scalar($"SELECT COUNT(*) FROM fellow WHERE user_no={user} AND fellow_id=110004"));
         JsonObject inbox = await server.CallGatewayAsync(63, new { type = 2, page = 1, count = 30 }, user);

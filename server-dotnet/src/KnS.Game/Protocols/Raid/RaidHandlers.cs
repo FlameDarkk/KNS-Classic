@@ -27,6 +27,12 @@ public static class RaidRules
     // UTC midnight follows the restored server's other daily systems; original timezone is unknown.
     public const long DailyEntryLimit = 10;
 
+    /// <summary>dt_etc_setting.json Init_Value "RaidBuffMax": Play Again score bonus caps at +15%.</summary>
+    public const long MaxBuffCount = 15;
+
+    public static long ApplyScoreBuff(long rawScore, long buffCount) =>
+        checked(rawScore * (100 + Math.Clamp(buffCount, 0, MaxBuffCount)) / 100);
+
     /// <summary>
     /// The raid stages (stage table 1) and the boss file each fights. Only these seven have challenge (mission) rows,
     /// and their stage-row banner art matches their boss; 3100016/21/22 reuse another stage's banner and have no challenges.
@@ -157,6 +163,9 @@ public sealed class RaidService(RaidRepository raids, FriendService friends, Pla
         return true;
     }
 
+    public long GetBuffCount(long userNumber, long? raidNumber = null) =>
+        Math.Clamp(raids.Get(raidNumber ?? Current, userNumber).Plays, 0, RaidRules.MaxBuffCount);
+
     /// <summary>Settle the started fight once; repeated results retain the first accepted score and week.</summary>
     public UserRaidInfo? CompletePlay(long userNumber, long score)
     {
@@ -166,6 +175,8 @@ public sealed class RaidService(RaidRepository raids, FriendService friends, Pla
         }
         if (play.Complete == 0)
         {
+            long buffBefore = GetBuffCount(userNumber, play.RaidNumber);
+            score = RaidRules.ApplyScoreBuff(score, buffBefore);
             raids.RecordPlay(play.RaidNumber, userNumber, score);
             raids.RecordChallengeScore(userNumber, RaidRules.BossOf(play.RaidNumber).StageId, Math.Min(score, int.MaxValue));
             raids.CompletePlay(userNumber, score);
@@ -189,6 +200,7 @@ public sealed class RaidStatusHandler(PlayerDirectory directory, RaidService rai
         return ProtocolResult.Success(new RaidStatusResponse
         {
             Ongoing = [raid.GetRaid()], RewardRaid = new RaidRewardInfo(pending ?? current, pending is null ? 1 : 0, 0),
+            BuffCount = raid.GetBuffCount(user, current),
         });
     }
 }
@@ -270,7 +282,12 @@ public sealed class RaidResultHandler(PlayerDirectory directory, RaidService rai
         UserRaidInfo? result = raid.CompletePlay(userNumber, score);
         return result is null
             ? ProtocolResult.Refused("no raid fight was started")
-            : ProtocolResult.Success(new RaidResultResponse { UserRaid = result, Challenges = challenges.Progress(userNumber) });
+            : ProtocolResult.Success(new RaidResultResponse
+            {
+                UserRaid = result,
+                BuffCount = raid.GetBuffCount(userNumber, result.RaidNumber),
+                Challenges = challenges.Progress(userNumber),
+            });
     }
 }
 

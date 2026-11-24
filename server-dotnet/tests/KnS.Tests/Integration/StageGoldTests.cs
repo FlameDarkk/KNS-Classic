@@ -100,6 +100,24 @@ public class StageGoldTests(ServerFixture server)
         Assert.Equal(before + 200, Gold(user));
     }
 
+    [Fact]
+    public async Task High_gold_event_stage_respects_native_pile_cap_above_default()
+    {
+        long stage = 3250220; // Forest of Hidden Treasures Hard: c108=330, c109=10 -> 3,300 G cap
+        long user = (await server.CallGatewayAsync(51, new { hub_did = "stage-gold-high-cap" }))["user_no"]!.GetValue<long>();
+        await server.CallGatewayAsync(60, new { }, user);
+        server.Execute($"UPDATE master_event_schedule SET start_time=0,end_time=2140000000,period_seconds=86400,duration_seconds=86400 WHERE stage_id={stage}");
+        Assert.Equal(0, (await server.CallGatewayAsync(71, new { stage_id = stage, stage_mode = 13, friend_type = 0, friend_user_no = 0 }, user))["errno"]!.GetValue<long>());
+        long before = Gold(user);
+        JsonObject result = await server.CallGatewayAsync(72, new
+        {
+            stage_no = stage + 1, stage_mode = 13, stage_result = 1, reward_gold = 3300,
+            reward_items = Array.Empty<long>(), event_items = Array.Empty<long>(),
+        }, user);
+        Assert.Equal(0, result["errno"]!.GetValue<long>());
+        Assert.True(Gold(user) >= before + 3300);
+    }
+
     private long Stamina(long user) => server.Scalar($"SELECT stamina FROM player_stamina WHERE user_no={user}");
 
     private async Task<long> StartAsync(string device)

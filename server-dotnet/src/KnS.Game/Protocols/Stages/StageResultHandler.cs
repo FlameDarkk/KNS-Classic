@@ -29,13 +29,11 @@ public sealed class StageResultHandler(
     FeatureFlags flags,
     DailyQuestRepository quests,
     StoryService storyService,
-    KnS.Game.Rewards.LoginRewardService tutorial,
+    MasterDataRepository masterData,
     EventStageRepository eventStages,
     TimeProvider clock,
     ILogger<StageResultHandler> logger) : IProtocolHandler
 {
-    private const long FirstDungeonStage = 3000001;
-
     public ProtocolResult Handle(GatewayRequest request)
     {
         RequestParameters parameters = request.Parameters;
@@ -63,14 +61,16 @@ public sealed class StageResultHandler(
                 Story = storyService.Current(userNumber), UserInfo = profiles.BuildUserInfo(player), Goods = profiles.GetGoods(userNumber),
             });
 
-        // The gold piles the client counted; a value that is not a number pays nothing. Capped at the most the piles can hold,
-        // and paid once per stage start (a result with no open start pays no gold).
+        // The gold piles the client counted; a value that is not a number pays nothing. Capped at the most the stage's
+        // piles can hold (dt_stage_pkg_140 c108 * c109, at least DropRules.MaxStageGold), paid once per stage start.
+        StageGoldSettings? goldSettings = masterData.GetStageGoldSettings(stageId);
+        long stageGoldCap = Math.Max(DropRules.MaxStageGold, goldSettings is { PileMax: > 0, PileCount: > 0 } ? goldSettings.PileMax * goldSettings.PileCount : 0);
         long reportedGold = parameters.GetInt64OrFallback("reward_gold");
-        if (reportedGold > DropRules.MaxStageGold)
+        if (reportedGold > stageGoldCap)
         {
-            logger.LogWarning("Stage result: reward_gold={Gold} exceeds the cap {Cap}; paying the cap", reportedGold, DropRules.MaxStageGold);
+            logger.LogWarning("Stage result: reward_gold={Gold} exceeds the cap {Cap}; paying the cap", reportedGold, stageGoldCap);
         }
-        profiles.AddCurrency(userNumber, gold: Math.Clamp(reportedGold, 0, DropRules.MaxStageGold));
+        profiles.AddCurrency(userNumber, gold: Math.Clamp(reportedGold, 0, stageGoldCap));
 
         logger.LogInformation("Stage result: reward_gold={Gold}, gold now {Balance}; reward_items={Rewards} event_items={Events} max_damage={MaxDamage}",
             parameters["reward_gold"]?.ToJsonString(), profiles.GetAccount(userNumber).Gold,
@@ -104,10 +104,6 @@ public sealed class StageResultHandler(
             logger.LogInformation("Stage result: +{Gain} exp -> Lv.{Level} {Exp}/{MaxExp}", gain, account.Level, account.Experience, account.MaxExperience);
             fellowExperience = fellows.AwardDungeonExperience(userNumber, gain, fourthSlot);
             progress.RecordClear(userNumber, stageId, start.StageMode);
-            if (stageId == FirstDungeonStage && tutorial.FinishTutorialQuest(userNumber, KnS.Game.Rewards.LoginRewardService.TutorialChain[^1]))
-            {
-                logger.LogInformation("Tutorial completed by the first dungeon clear; Ally Ticket mailed");
-            }
             if (stageId is >= 3000000 and < 3100000)
             {
                 quests.Add(userNumber, clock.GetUtcNow().ToUnixTimeSeconds() / 86400, 5300002, 1);

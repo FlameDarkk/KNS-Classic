@@ -43,12 +43,12 @@ public class EventDungeonTests(ServerFixture server)
     [Theory]
     [InlineData(3250300, 110001, 0)]
     [InlineData(3200280, 300241, 0)]
-    [InlineData(3250200, 1900015, 1250)]
-    [InlineData(3250210, 1900015, 1300)]
-    [InlineData(3250220, 1900015, 1350)]
-    [InlineData(3250400, 1900015, 1250)]
-    [InlineData(3250410, 1900015, 1300)]
-    [InlineData(3250420, 1900015, 1350)]
+    [InlineData(3250200, 1900015, 160)]
+    [InlineData(3250210, 1900015, 1000)]
+    [InlineData(3250220, 1900015, 2500)]
+    [InlineData(3250400, 1900015, 160)]
+    [InlineData(3250410, 1900015, 1000)]
+    [InlineData(3250420, 1900015, 2500)]
     public async Task Event_rewards_use_selected_difficulty_and_settle_once(long stage, long expectedReward, long expectedBoxGold)
     {
         using var scope = server.CreateScope();
@@ -205,7 +205,7 @@ public class EventDungeonTests(ServerFixture server)
                 + "period_seconds=86400,duration_seconds=86400 WHERE stage_id=3250000");
             JsonObject first = await server.CallGatewayAsync(71, new { stage_id = 3250000, stage_mode = 11 }, user);
             Assert.Equal(0, first["errno"]!.GetValue<long>());
-            Assert.Equal(105, first["user_info"]!["user_stamina"]!.GetValue<long>());
+            Assert.Equal(28, first["user_info"]!["user_stamina"]!.GetValue<long>());
             Assert.Equal(5300004, first["daily_quest_info"]!["quest_id"]!.GetValue<long>());
             Assert.Equal(1, first["daily_quest_info"]!["quest_count"]!.GetValue<long>());
             Assert.NotEqual(10, first["stage_info"]!["monster_info_3250000"]![0]!["MaxHP"]!.GetValue<long>());
@@ -214,7 +214,7 @@ public class EventDungeonTests(ServerFixture server)
             server.Execute("UPDATE master_event_schedule SET end_time=1 WHERE stage_id=3250000");
             JsonObject closed = await server.CallGatewayAsync(71, new { stage_id = 3250000, stage_mode = 11 }, user);
             Assert.NotEqual(0, closed["errno"]!.GetValue<long>());
-            Assert.Equal(105, server.Scalar($"SELECT stamina FROM player_stamina WHERE user_no={user}"));
+            Assert.Equal(28, server.Scalar($"SELECT stamina FROM player_stamina WHERE user_no={user}"));
             Assert.Equal(1, server.Scalar($"SELECT quest_count FROM daily_quest_progress WHERE user_no={user} AND quest_id=5300004"));
 
             server.Execute("UPDATE master_event_schedule SET end_time=2140000000 WHERE stage_id=3250000");

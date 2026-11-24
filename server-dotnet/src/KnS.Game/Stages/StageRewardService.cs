@@ -77,13 +77,17 @@ public sealed class StageRewardService(
             drops.Add(new DropOffer(fellowId, offerNumber));
         }
 
-        long goldBoxAmount = DropRules.GoldBoxBase + DropRules.GoldBoxPerMonsterLevel * (setup?.MonsterLevel ?? 1);
+        StageGoldSettings? goldSettings = masterData.GetStageGoldSettings(stageId);
+        long fallbackGoldBox = DropRules.GoldBoxBase + DropRules.GoldBoxPerMonsterLevel * (setup?.MonsterLevel ?? 1);
 
         int goldBoxes = Math.Min(
             GetRolledItems(userNumber, id => id == CurrencyItems.GoldBox).Count,
             DropRules.MaxDropsPerList - drops.Count);
         for (int i = 0; i < goldBoxes; i++)
         {
+            long goldBoxAmount = goldSettings is { GoldBoxMax: > 0 }
+                ? random.NextInclusive(Math.Max(1, goldSettings.GoldBoxMin), Math.Max(Math.Max(1, goldSettings.GoldBoxMin), goldSettings.GoldBoxMax))
+                : fallbackGoldBox;
             long offerNumber = stages.AddEventOffer(userNumber, CurrencyItems.GoldBox, goldBoxAmount);
             // The boss list sends the box as gold, which CreateDropItem draws as the Gold Box.
             drops.Add(new DropOffer(bossStage ? CurrencyItems.Gold : CurrencyItems.GoldBox, offerNumber));
@@ -361,36 +365,67 @@ public sealed class StageRewardService(
     }
 
     /// <summary>
-    /// Rolls each slot group once (cumulative chances against one 0-99 roll; at most one slot per
-    /// group hits) and keeps the hits with their rolled counts.
+    /// Rolls each slot group independently using the stage's native roll counts (dt_stage_pkg_140
+    /// ints[112..115]: normal monster group 0-9 min..max rolls, boss group 10-13 min..max rolls).
+    /// Each roll draws one 0-99 cumulative check (like GetDropItemID@0xf4aa0); repeated hits on
+    /// the same slot accumulate in stage_roll.
     /// </summary>
     private void RollStage(long userNumber, long stageId)
     {
         stages.ClearRolledRewards(userNumber);
         Dictionary<long, StageRewardSlot> slots = masterData.GetRewardSlots(stageId).ToDictionary(slot => slot.Slot);
-        foreach ((long first, long last) in DropRules.RewardSlotGroups)
+        if (options.DropEverything)
         {
-            long roll = random.NextInclusive(0, 99);
-            long cumulative = 0;
-            bool hit = false;
-            for (long slotNumber = first; slotNumber <= last; slotNumber++)
+            foreach ((long first, long last) in DropRules.RewardSlotGroups)
             {
-                if (!slots.TryGetValue(slotNumber, out StageRewardSlot? slot))
+                for (long slotNumber = first; slotNumber <= last; slotNumber++)
                 {
-                    continue;
-                }
+                    if (!slots.TryGetValue(slotNumber, out StageRewardSlot? slot))
+                    {
+                        continue;
+                    }
 
-                cumulative += slot.Chance;
-                if (options.DropEverything || (!hit && roll < cumulative))
-                {
-                    hit = true;
                     long count = random.NextInclusive(Math.Max(1, slot.MinCount), Math.Max(Math.Max(1, slot.MinCount), slot.MaxCount));
                     stages.AddRolledReward(userNumber, slot.Slot, slot.ItemId, count);
                 }
+            }
 
-                if (hit && !options.DropEverything)
+            return;
+        }
+
+        StageDropRollCounts rollCounts = masterData.GetStageDropRollCounts(stageId);
+        (long First, long Last, long MinRolls, long MaxRolls)[] groups =
+        [
+            (DropRules.RewardSlotGroups[0].First, DropRules.RewardSlotGroups[0].Last, rollCounts.NormalMin, rollCounts.NormalMax),
+            (DropRules.RewardSlotGroups[1].First, DropRules.RewardSlotGroups[1].Last, rollCounts.BossMin, rollCounts.BossMax),
+        ];
+
+        foreach ((long first, long last, long minRolls, long maxRolls) in groups)
+        {
+            if (maxRolls <= 0)
+            {
+                continue;
+            }
+
+            long rolls = random.NextInclusive(minRolls, maxRolls);
+            for (long r = 0; r < rolls; r++)
+            {
+                long roll = random.NextInclusive(0, 99);
+                long cumulative = 0;
+                for (long slotNumber = first; slotNumber <= last; slotNumber++)
                 {
-                    break;
+                    if (!slots.TryGetValue(slotNumber, out StageRewardSlot? slot))
+                    {
+                        continue;
+                    }
+
+                    cumulative += slot.Chance;
+                    if (roll < cumulative)
+                    {
+                        long count = random.NextInclusive(Math.Max(1, slot.MinCount), Math.Max(Math.Max(1, slot.MinCount), slot.MaxCount));
+                        stages.AddRolledReward(userNumber, slot.Slot, slot.ItemId, count);
+                        break;
+                    }
                 }
             }
         }

@@ -42,7 +42,7 @@ public sealed class PlayerProfileService(
     public (long Max, long RefillSeconds) GetStaminaLimits(long userNumber)
     {
         (long maxCount, long timeCount) = buffs.GetStaminaUpgrades(userNumber);
-        return (PlayerRules.MaxStamina(GetAccount(userNumber).Level, maxCount), PlayerRules.StaminaRefillSecondsAfter(timeCount));
+        return (PlayerRules.MaxStaminaWithUpgrades(BaseMaxStaminaAt(GetAccount(userNumber).Level), maxCount), PlayerRules.StaminaRefillSecondsAfter(timeCount));
     }
 
     /// <summary>The hunger bar now: the stored value plus a point per elapsed refill period, capped at full.</summary>
@@ -184,7 +184,7 @@ public sealed class PlayerProfileService(
             Gems = account.Gems,
             Stamina = stamina,
             // The client adds the MAX Stamina bonus itself from user_max_stamina_buff (UpdateUserInfo@0x14ad90).
-            MaxStamina = PlayerRules.BaseMaxStamina(account.Level),
+            MaxStamina = BaseMaxStaminaAt(account.Level),
             MaxStaminaBuff = maxUpgrades,
             StaminaTimeBuff = timeUpgrades,
             StaminaRefillSeconds = stamina >= max ? 0 : Math.Max(0, lastGain + refill - now),
@@ -222,4 +222,7 @@ public sealed class PlayerProfileService(
 
     private long MaxExperienceAt(long level) =>
         masterData.GetExperienceToNextLevel(level) ?? PlayerRules.FallbackMaxExperience;
+
+    private long BaseMaxStaminaAt(long level) =>
+        masterData.GetMaxStamina(level) ?? PlayerRules.BaseMaxStamina(level);
 }

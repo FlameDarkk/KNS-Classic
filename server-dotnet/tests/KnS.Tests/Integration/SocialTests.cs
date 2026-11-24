@@ -156,7 +156,7 @@ public class SocialTests(ServerFixture server)
         Assert.Single(claim["success_fellow_mission_infos"]!.AsArray());
         JsonArray goods = claim["update_item_etc_info"]!.AsArray();
         Assert.Single(goods.Where(row => row!["item_id"]!.GetValue<long>() == 1900014));
-        Assert.Equal(124, goods.Single(row => row!["item_id"]!.GetValue<long>() == 1900014)!["count"]!.GetValue<long>());
+        Assert.Equal(47, goods.Single(row => row!["item_id"]!.GetValue<long>() == 1900014)!["count"]!.GetValue<long>());
         JsonArray gear = claim["fellow_item_infos"]!.AsArray();
         Assert.Equal(2, gear.Count);
         Assert.All(gear, row => Assert.Equal(1201006, row!["fellow_item_id"]!.GetValue<long>()));
@@ -164,7 +164,7 @@ public class SocialTests(ServerFixture server)
         JsonObject repeat = await server.CallGatewayAsync(325, new { mission_id_list = new[] { mission }, use_cash = 0 }, user);
         Assert.Empty(repeat["fellow_item_infos"]!.AsArray());
         Assert.Equal(2, server.Scalar($"SELECT COUNT(*) FROM fellow_item WHERE user_no={user} AND fellow_item_id=1201006"));
-        Assert.Equal(124, server.Scalar($"SELECT stamina FROM player_stamina WHERE user_no={user}"));
+        Assert.Equal(47, server.Scalar($"SELECT stamina FROM player_stamina WHERE user_no={user}"));
     }
 
     [Fact]

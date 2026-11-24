@@ -24,11 +24,9 @@ public sealed record DailyRewardResponse(
     [property: JsonPropertyName("reward_type")] long RewardType);
 
 /// <summary>
-/// Protocols 602/603: FinishTutorial@0x10c09c sends one when a tutorial ends and shows "You completed the Tutorial!" /
-/// "Your reward has been sent to your Message Box." (texts 9992913/9992914). Both reply cases (@0x15d660, @0x15d612)
-/// read user_info and update_item_etc_info. The request carries quest_id; finishing the last quest of
-/// <see cref="LoginRewardService.TutorialChain"/> completes the tutorial. Reward: one Ally Ticket, once per account, when the
-/// chain completes (restoration choice).
+/// Protocols 602/603: FinishTutorial@0x10c09c sends one when a tutorial ends. Both reply cases (@0x15d660, @0x15d612)
+/// read user_info and update_item_etc_info. The request carries quest_id; native dt_quest_140 rewards are credited
+/// directly to the wallet once per account (5000002 = 30 Gems, 5000005 = 1,000 Gold, 5000012 = 1,000 Gold).
 /// </summary>
 public sealed class TutorialRewardHandler(PlayerDirectory directory, PlayerProfileService profiles, LoginRewardService rewards)
     : IProtocolHandler
@@ -50,15 +48,23 @@ public sealed record TutorialRewardResponse(
 /// quest_id, action_count, try_count, complete). NetworkEvent@0x153940 starts tutorial quest_id (StartTutorial); an empty
 /// list marks the main tutorials finished, which is what a player who completed the tutorial gets.
 /// </summary>
-public sealed class QuestListHandler(PlayerDirectory directory, LoginRewardService rewards, KnS.Game.Stages.StageProgressService progress) : IProtocolHandler
+public sealed class QuestListHandler(
+    PlayerDirectory directory,
+    LoginRewardService rewards,
+    KnS.Game.Stages.StageProgressService progress,
+    KnS.Data.Repositories.FellowRepository fellows) : IProtocolHandler
 {
+    private const long FirstDungeonStage = 3000001;
+
     public ProtocolResult Handle(GatewayRequest request)
     {
         long userNumber = directory.ResolveCurrent(request).UserNumber;
-        // A player who already cleared a dungeon is past the tutorial (its scripted popups would block the map): finish it.
-        if (rewards.CurrentTutorialQuest(userNumber) > 0 && progress.GetClears(userNumber).Count > 0)
+        // Legacy accounts with no tutorial_progress row that already progressed past stage 1 (cleared another stage
+        // or own an ally) skip the intro chain so scripted popups do not block them.
+        if (!rewards.HasTutorialProgress(userNumber)
+            && (progress.GetClears(userNumber).Any(c => c.StageId != FirstDungeonStage) || fellows.GetOwnedFellowNumbers(userNumber).Count > 0))
         {
-            rewards.FinishTutorialQuest(userNumber, LoginRewardService.TutorialChain[^1]);
+            rewards.SkipTutorialChain(userNumber);
         }
 
         long quest = rewards.CurrentTutorialQuest(userNumber);

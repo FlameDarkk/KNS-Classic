@@ -13,7 +13,7 @@ public sealed record LoginRewardResult(long RewardType, long Day);
 /// every account gets the 7-day gift once from its first login, afterwards only after <see cref="ReturningAfterDays"/>
 /// days without a login; while the gift runs both schedules pay and the popup shows the gift.
 /// </summary>
-public sealed class LoginRewardService(LoginRewardRepository rewards, MailRepository mail, TimeProvider clock)
+public sealed class LoginRewardService(LoginRewardRepository rewards, MailRepository mail, PlayerRepository players, TimeProvider clock)
 {
     public const long GiftKind = 1;
     public const long CalendarKind = 2;
@@ -21,8 +21,16 @@ public sealed class LoginRewardService(LoginRewardRepository rewards, MailReposi
     public const long CalendarDays = 28;
     public const long ReturningAfterDays = 30;
 
-    public const long TutorialRewardItem = 1900012;
-    public const long TutorialRewardText = MailTexts.TutorialReward;
+    /// <summary>
+    /// Native tutorial quest rewards from dt_quest_140.dat (credited directly to the wallet on 602/603):
+    /// 5000002 = 30 Gems (for the forced 5000003 shop ally draw), 5000005 = 1,000 Gold, 5000012 = 1,000 Gold.
+    /// </summary>
+    public static readonly IReadOnlyDictionary<long, (long Gold, long Gems)> TutorialRewards = new Dictionary<long, (long Gold, long Gems)>
+    {
+        [5000002] = (0, 30),
+        [5000005] = (1000, 0),
+        [5000012] = (1000, 0),
+    };
 
     public LoginRewardResult Claim(long userNumber)
     {
@@ -73,30 +81,54 @@ public sealed class LoginRewardService(LoginRewardRepository rewards, MailReposi
     /// </summary>
     public static readonly long[] TutorialChain = [5000001, 5000002, 5000003, 5000004, 5000005];
 
+    /// <summary>Whether tutorial_progress has an explicit row for this player (false = brand-new or legacy account).</summary>
+    public bool HasTutorialProgress(long userNumber) => rewards.TutorialQuest(userNumber) is not null;
+
     /// <summary>The tutorial quest 601 reports; 0 once the chain is finished (the client then skips every tutorial).</summary>
     public long CurrentTutorialQuest(long userNumber) => rewards.TutorialQuest(userNumber) ?? TutorialChain[0];
 
+    /// <summary>Marks the main tutorial chain finished without paying rewards (for legacy accounts already past stage 1).</summary>
+    public void SkipTutorialChain(long userNumber) => rewards.SetTutorialQuest(userNumber, 0);
+
     /// <summary>
-    /// 602/603 report the tutorial just finished (quest_id = gameInfo+0x338c). Moves the account to the next quest, never
-    /// back; the last one completes the tutorial for good and mails the reward. True when the tutorial was just completed.
+    /// 602/603 report the tutorial just finished (quest_id = gameInfo+0x338c). Moves the account forward through
+    /// <see cref="TutorialChain"/> and pays the native dt_quest_140 reward for that quest once per account
+    /// (5000002 = 30 Gems, 5000005 = 1,000 Gold, 5000012 = 1,000 Gold). Returns true when a reward was granted.
     /// </summary>
     public bool FinishTutorialQuest(long userNumber, long questId)
     {
-        long current = CurrentTutorialQuest(userNumber);
-        int done = Array.IndexOf(TutorialChain, questId), at = Array.IndexOf(TutorialChain, current);
-        if (current == 0 || done < 0 || done < at) return false;
-        long next = done + 1 < TutorialChain.Length ? TutorialChain[done + 1] : 0;
-        rewards.SetTutorialQuest(userNumber, next);
-        return next == 0 && ClaimTutorial(userNumber);
+        int done = Array.IndexOf(TutorialChain, questId);
+        if (done >= 0)
+        {
+            long current = CurrentTutorialQuest(userNumber);
+            int at = Array.IndexOf(TutorialChain, current);
+            if (current == 0 || done < at)
+            {
+                return false;
+            }
+
+            long next = done + 1 < TutorialChain.Length ? TutorialChain[done + 1] : 0;
+            rewards.SetTutorialQuest(userNumber, next);
+            return GrantTutorialQuestReward(userNumber, questId);
+        }
+
+        // Feature unlock tutorials (e.g. 5000012 Mission tutorial = 1,000 Gold) run outside the 5000001-5000005 chain.
+        return TutorialRewards.ContainsKey(questId) && GrantTutorialQuestReward(userNumber, questId);
     }
 
-    /// <summary>Mails the one-time tutorial reward (an Ally Ticket); false when it was already given.</summary>
-    public bool ClaimTutorial(long userNumber)
+    private bool GrantTutorialQuestReward(long userNumber, long questId)
     {
-        mail.LockUser(userNumber);
-        if (!rewards.ClaimTutorial(userNumber)) return false;
-        mail.Add(userNumber, TutorialRewardItem, 1, message: "Tutorial Reward", textCode: TutorialRewardText,
-            regDate: clock.GetUtcNow().ToUnixTimeSeconds());
+        if (!TutorialRewards.TryGetValue(questId, out (long Gold, long Gems) reward))
+        {
+            return false;
+        }
+
+        if (!rewards.ClaimTutorialQuestReward(userNumber, questId))
+        {
+            return false;
+        }
+
+        players.AddCurrency(userNumber, gold: reward.Gold, gems: reward.Gems);
         return true;
     }
 

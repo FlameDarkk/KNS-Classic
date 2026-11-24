@@ -50,11 +50,11 @@ public class GemPurchaseTests(ServerFixture server)
         server.Execute($"INSERT INTO player_stamina(user_no,stamina,last_gain) VALUES({user},20,{DateTimeOffset.UtcNow.ToUnixTimeSeconds()})");
         JsonObject reply = await server.CallGatewayAsync(105, new { }, user);
         Assert.Equal(0, reply["errno"]!.GetValue<long>());
-        Assert.Equal(109, server.Scalar($"SELECT stamina FROM player_stamina WHERE user_no={user}"));
+        Assert.Equal(32, server.Scalar($"SELECT stamina FROM player_stamina WHERE user_no={user}"));
         Assert.Equal(95, server.Scalar($"SELECT cash FROM gameuser WHERE user_no={user}"));
-        Assert.Equal(109, reply["user_info"]!["user_stamina"]!.GetValue<long>());
+        Assert.Equal(32, reply["user_info"]!["user_stamina"]!.GetValue<long>());
         JsonObject reload = await server.CallGatewayAsync(60, new { user_no = user }, user);
-        Assert.Equal(109, reload["user_info"]!["user_stamina"]!.GetValue<long>());
+        Assert.Equal(32, reload["user_info"]!["user_stamina"]!.GetValue<long>());
         Assert.NotEqual(0, (await server.CallGatewayAsync(105, new { }, user))["errno"]!.GetValue<long>());
         Assert.Equal(95, server.Scalar($"SELECT cash FROM gameuser WHERE user_no={user}"));
     }

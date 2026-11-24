@@ -32,6 +32,10 @@ public sealed class MasterDataRepository(DataSession session)
     public long? GetExperienceToNextLevel(long level) =>
         session.QueryFirstOrDefault<long?>("SELECT exp_to_next FROM master_level WHERE level=@level", new { level });
 
+    /// <summary>Native base max stamina for a player level (master_level.max_stamina), or null for an unknown level.</summary>
+    public long? GetMaxStamina(long level) =>
+        session.QueryFirstOrDefault<long?>("SELECT max_stamina FROM master_level WHERE level=@level", new { level });
+
     /// <summary>Player level → exp needed to leave it.</summary>
     public Dictionary<long, long> GetExperienceTable() =>
         session.Query<(long Level, long ExperienceToNext)>("SELECT level, exp_to_next FROM master_level")
@@ -236,6 +240,39 @@ public sealed class MasterDataRepository(DataSession session)
         session.QueryFirstOrDefault<long?>(
             $"SELECT {StageExperienceColumn} FROM master_stage WHERE stage_id=@stageId", new { stageId });
 
+    /// <summary>
+    /// Native drop-roll counts from dt_stage_pkg_140 ints[112..115] (byte offsets 448..463 in raw_hex):
+    /// Group 1 (normal monsters, slots 0-9) min/max rolls and Group 2 (boss, slots 10-13) min/max rolls.
+    /// </summary>
+    public StageDropRollCounts GetStageDropRollCounts(long stageId)
+    {
+        string? rawHex = session.QueryFirstOrDefault<string?>(
+            "SELECT raw_hex FROM master_stage WHERE stage_id=@stageId", new { stageId });
+        if (string.IsNullOrEmpty(rawHex) || rawHex.Length < 464 * 2)
+        {
+            return new StageDropRollCounts(1, 1, 1, 1);
+        }
+
+        byte[] bytes = Convert.FromHexString(rawHex.AsSpan(448 * 2, 16 * 2));
+        int normalMin = BitConverter.ToInt32(bytes, 0);
+        int normalMax = BitConverter.ToInt32(bytes, 4);
+        int bossMin = BitConverter.ToInt32(bytes, 8);
+        int bossMax = BitConverter.ToInt32(bytes, 12);
+        return new StageDropRollCounts(
+            Math.Max(0, normalMin), Math.Max(Math.Max(0, normalMin), normalMax),
+            Math.Max(0, bossMin), Math.Max(Math.Max(0, bossMin), bossMax));
+    }
+
+    /// <summary>
+    /// Native stage gold settings from dt_stage_pkg_140 ints[107..111] (c107..c111):
+    /// loose gold pile min/max/count and Gold Box (1900015) min/max amount.
+    /// </summary>
+    public StageGoldSettings? GetStageGoldSettings(long stageId) =>
+        session.QueryFirstOrDefault<StageGoldSettings>(
+            "SELECT c107 AS PileMin, c108 AS PileMax, c109 AS PileCount, c110 AS GoldBoxMin, c111 AS GoldBoxMax"
+            + " FROM master_stage WHERE stage_id=@stageId",
+            new { stageId });
+
     public StageMonsterSetup? GetStageMonsterSetup(long stageId) =>
         session.QueryFirstOrDefault<StageMonsterSetup>(
             "SELECT monster_level AS MonsterLevel, normal_monster_file AS NormalMonsterFile, hard_monster_file AS HardMonsterFile"
@@ -385,4 +422,15 @@ public sealed class MasterDataRepository(DataSession session)
             + " WHERE expansion_level=@expansionLevel",
             new { expansionLevel });
     }
+}
+
+public sealed record StageDropRollCounts(long NormalMin, long NormalMax, long BossMin, long BossMax);
+
+public sealed record StageGoldSettings
+{
+    public long PileMin { get; init; }
+    public long PileMax { get; init; }
+    public long PileCount { get; init; }
+    public long GoldBoxMin { get; init; }
+    public long GoldBoxMax { get; init; }
 }

@@ -669,8 +669,8 @@ public class ShopAndQuestTests(ServerFixture server)
 
         JsonObject start = await server.CallGatewayAsync(71, new { stage_id = 3000001, stage_mode = 1, friend_type = 0, friend_user_no = 0 }, user);
 
-        Assert.Equal(106, start["user_info"]!["user_stamina"]!.GetValue<long>());
-        Assert.Equal(106, Count(start, 1900014));
+        Assert.Equal(29, start["user_info"]!["user_stamina"]!.GetValue<long>());
+        Assert.Equal(29, Count(start, 1900014));
         Assert.InRange(start["user_info"]!["user_remind_time_stamina"]!.GetValue<long>(), 1, 300);
 
         server.Execute($"UPDATE player_stamina SET stamina=1 WHERE user_no={user}");
@@ -707,8 +707,8 @@ public class ShopAndQuestTests(ServerFixture server)
         server.Execute($"INSERT INTO user_goods(user_no,item_id,count) VALUES({user},1900014,10)");
         JsonObject[] replies = await Task.WhenAll(Enumerable.Range(0, 4)
             .Select(_ => server.CallGatewayAsync(60, new { user_no = user }, user)));
-        Assert.All(replies, reply => Assert.Equal(119, reply["user_info"]!["user_stamina"]!.GetValue<long>()));
-        Assert.Equal(119, server.Scalar($"SELECT stamina FROM player_stamina WHERE user_no={user}"));
+        Assert.All(replies, reply => Assert.Equal(42, reply["user_info"]!["user_stamina"]!.GetValue<long>()));
+        Assert.Equal(42, server.Scalar($"SELECT stamina FROM player_stamina WHERE user_no={user}"));
         Assert.Equal(10, server.Scalar($"SELECT credited FROM stamina_recovery WHERE user_no={user}"));
         Assert.Equal(10, server.Scalar($"SELECT count FROM user_goods WHERE user_no={user} AND item_id=1900014"));
     }
@@ -720,13 +720,13 @@ public class ShopAndQuestTests(ServerFixture server)
         long now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
         await server.CallGatewayAsync(71, new { stage_id = 3000001, stage_mode = 1, friend_type = 0, friend_user_no = 0 }, user);
 
-        server.Execute($"UPDATE player_stamina SET stamina=50, last_gain={now - 610} WHERE user_no={user}");
+        server.Execute($"UPDATE player_stamina SET stamina=10, last_gain={now - 610} WHERE user_no={user}");
         JsonObject partly = await server.CallGatewayAsync(60, new { user_no = user }, user);
-        server.Execute($"UPDATE player_stamina SET stamina=50, last_gain={now - 99_000} WHERE user_no={user}");
+        server.Execute($"UPDATE player_stamina SET stamina=10, last_gain={now - 99_000} WHERE user_no={user}");
         JsonObject full = await server.CallGatewayAsync(60, new { user_no = user }, user);
 
-        Assert.Equal(52, partly["user_info"]!["user_stamina"]!.GetValue<long>());
-        Assert.Equal(109, full["user_info"]!["user_stamina"]!.GetValue<long>());
+        Assert.Equal(12, partly["user_info"]!["user_stamina"]!.GetValue<long>());
+        Assert.Equal(32, full["user_info"]!["user_stamina"]!.GetValue<long>());
     }
 
     [Fact]

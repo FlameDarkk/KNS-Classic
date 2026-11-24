@@ -123,6 +123,44 @@ public class RaidLifecycleTests(ServerFixture server)
         Assert.Equal(8, board["user_raid_ranking_info"]!["count"]!.GetValue<long>());
     }
 
+    [Fact]
+    public async Task Play_again_buff_increments_one_percent_per_play_up_to_fifteen_and_resets_on_boss_rotation()
+    {
+        var (user, raid) = await PlayerAsync("raid-play-again-buff");
+        JsonObject status0 = await server.CallGatewayAsync(501, new { }, user);
+        Assert.Equal(0, status0["raid_buff_count"]!.GetValue<long>());
+
+        // Play 1: +0% -> score 1000, post-play buff = 1
+        Assert.Equal(0, (await server.CallGatewayAsync(503, new { raid_no = raid }, user))["errno"]!.GetValue<long>());
+        JsonObject res1 = await server.CallGatewayAsync(504, new { score = 1000 }, user);
+        Assert.Equal(1000, res1["user_raid_info"]!["current_score"]!.GetValue<long>());
+        Assert.Equal(1, res1["raid_buff_count"]!.GetValue<long>());
+        // Duplicate 504 stays idempotent.
+        JsonObject dup1 = await server.CallGatewayAsync(504, new { score = 1000 }, user);
+        Assert.Equal(1000, dup1["user_raid_info"]!["current_score"]!.GetValue<long>());
+        Assert.Equal(1, dup1["raid_buff_count"]!.GetValue<long>());
+
+        // Play 2: +1% -> score 1010, post-play buff = 2
+        Assert.Equal(0, (await server.CallGatewayAsync(503, new { raid_no = raid }, user))["errno"]!.GetValue<long>());
+        JsonObject res2 = await server.CallGatewayAsync(504, new { score = 1000 }, user);
+        Assert.Equal(1010, res2["user_raid_info"]!["current_score"]!.GetValue<long>());
+        Assert.Equal(2, res2["raid_buff_count"]!.GetValue<long>());
+        Assert.Equal(2, (await server.CallGatewayAsync(501, new { }, user))["raid_buff_count"]!.GetValue<long>());
+
+        // Simulate 15 completed plays -> +15% MAX, stays capped at 15.
+        server.Execute($"UPDATE raid_score SET plays=15 WHERE raid_no={raid} AND user_no={user}");
+        Assert.Equal(15, (await server.CallGatewayAsync(501, new { }, user))["raid_buff_count"]!.GetValue<long>());
+        Assert.Equal(0, (await server.CallGatewayAsync(503, new { raid_no = raid }, user))["errno"]!.GetValue<long>());
+        JsonObject resMax = await server.CallGatewayAsync(504, new { score = 1000 }, user);
+        Assert.Equal(1150, resMax["user_raid_info"]!["current_score"]!.GetValue<long>());
+        Assert.Equal(15, resMax["raid_buff_count"]!.GetValue<long>());
+
+        // New raid week resets raid_buff_count to 0.
+        using var scope = server.CreateScope();
+        var raidService = scope.ServiceProvider.GetRequiredService<RaidService>();
+        Assert.Equal(0, raidService.GetBuffCount(user, raid + 1000));
+    }
+
     private sealed class RaidTestClock(DateTimeOffset now) : TimeProvider
     {
         public DateTimeOffset Now { get; set; } = now;

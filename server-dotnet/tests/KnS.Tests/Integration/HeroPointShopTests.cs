@@ -75,14 +75,14 @@ public class HeroPointShopTests(ServerFixture server)
             JsonObject reply = await server.CallGatewayAsync(901, new { }, user);
             Assert.Equal(0, reply["errno"]!.GetValue<long>());
             Assert.Equal(i, reply["user_info"]!["user_max_stamina_buff"]!.GetValue<long>());
-            Assert.Equal(109, reply["user_info"]!["user_max_stamina"]!.GetValue<long>());
+            Assert.Equal(32, reply["user_info"]!["user_max_stamina"]!.GetValue<long>());
         }
 
         Assert.NotEqual(0, (await server.CallGatewayAsync(901, new { }, user))["errno"]!.GetValue<long>());
         Assert.Equal(2500, server.Scalar($"SELECT count FROM user_goods WHERE user_no={user} AND item_id=1900016"));
-        // Level 10 gives 109 base stamina; ten upgrades add 20.
+        // Level 10 gives 32 base stamina (master_level.max_stamina); ten upgrades add 20.
         server.Execute($"INSERT OR REPLACE INTO player_stamina(user_no,stamina,last_gain) VALUES({user},0,1)");
-        Assert.Equal(129, (await server.CallGatewayAsync(60, new { }, user))["user_info"]!["user_stamina"]!.GetValue<long>());
+        Assert.Equal(52, (await server.CallGatewayAsync(60, new { }, user))["user_info"]!["user_stamina"]!.GetValue<long>());
     }
 
     [Fact]

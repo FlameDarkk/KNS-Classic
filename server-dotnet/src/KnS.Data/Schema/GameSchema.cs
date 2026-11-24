@@ -215,6 +215,12 @@ internal sealed class GameSchema(DataSession session, string masterDataDirectory
                 user_no {Sql.IntegerColumn} PRIMARY KEY, quest_id {Sql.IntegerColumn})
             """);
 
+        // Per-quest tutorial reward claims (5000002 = 30 Gems, 5000005 = 1,000 Gold, 5000012 = 1,000 Gold).
+        session.Execute($"""
+            CREATE TABLE IF NOT EXISTS tutorial_quest_claim(
+                user_no {Sql.IntegerColumn}, quest_id {Sql.IntegerColumn}, PRIMARY KEY(user_no, quest_id))
+            """);
+
         // Starter gear has no item row, so its locks live here.
         session.Execute($"""
             CREATE TABLE IF NOT EXISTS starter_item_lock(

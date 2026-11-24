@@ -60,7 +60,8 @@ public sealed class StageRepository(DataSession session)
 
     public void AddRolledReward(long userNumber, long slot, long itemId, long count) =>
         session.Execute(
-            "INSERT INTO stage_roll(user_no, slot, item_id, count) VALUES(@userNumber, @slot, @itemId, @count)",
+            "INSERT INTO stage_roll(user_no, slot, item_id, count) VALUES(@userNumber, @slot, @itemId, @count)"
+            + $" {session.Dialect.OnConflictUpdate("user_no, slot")} count=count+@count",
             new { userNumber, slot, itemId, count });
 
     /// <summary>The reward slots the last stage start hit, in slot order.</summary>

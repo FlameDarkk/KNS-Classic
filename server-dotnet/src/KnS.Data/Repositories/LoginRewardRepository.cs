@@ -64,6 +64,12 @@ public sealed class LoginRewardRepository(DataSession session)
         session.Execute("UPDATE tutorial_progress SET quest_id=@questId WHERE user_no=@userNumber", new { userNumber, questId });
     }
 
+    /// <summary>Records a one-time tutorial quest reward claim; false if this quest was already rewarded.</summary>
+    public bool ClaimTutorialQuestReward(long userNumber, long questId) =>
+        session.Execute(
+            $"{session.Dialect.InsertOrIgnore} INTO tutorial_quest_claim(user_no, quest_id) VALUES(@userNumber, @questId)",
+            new { userNumber, questId }) == 1;
+
     /// <summary>One row of master_login_reward: kind 1 = 7-day gift, 2 = monthly calendar.</summary>
     public LoginReward? Reward(long kind, long day) =>
         session.QueryFirstOrDefault<LoginReward>(

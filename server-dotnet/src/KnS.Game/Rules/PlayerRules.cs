@@ -9,7 +9,7 @@ public static class PlayerRules
     /// <summary>The exp bar's size when master_level has no row for the level.</summary>
     public const long FallbackMaxExperience = 100;
 
-    public const long Stamina = 100;
+    public const long Stamina = 28;
 
     /// <summary>A hunger point regrows every this many seconds (dt_etc_setting.json Store "StaminaRefreshTime").</summary>
     public const long StaminaRefillSeconds = 300;
@@ -23,11 +23,14 @@ public static class PlayerRules
 
     public const long StaminaUpgradePrice = 2500;
 
-    /// <summary>Level 1 starts at 100; each later player level adds one to the base capacity.</summary>
-    public static long BaseMaxStamina(long level) => Stamina + Math.Max(0, level - 1);
+    /// <summary>Fallback base capacity when master_level has no row for the level (native curve: 28 + (level - 1) / 2).</summary>
+    public static long BaseMaxStamina(long level) => Stamina + Math.Max(0, (level - 1) / 2);
 
-    /// <summary>Level-based capacity plus Hero Point MAX Stamina upgrades (UpdateUserInfo adds row +4).</summary>
-    public static long MaxStamina(long level, long purchases) => BaseMaxStamina(level) + 2 * Math.Clamp(purchases, 0, StaminaUpgradeLimit);
+    /// <summary>Base capacity plus Hero Point MAX Stamina upgrades (UpdateUserInfo adds row +4).</summary>
+    public static long MaxStaminaWithUpgrades(long baseMax, long purchases) => baseMax + 2 * Math.Clamp(purchases, 0, StaminaUpgradeLimit);
+
+    /// <summary>Fallback level-based capacity plus Hero Point MAX Stamina upgrades.</summary>
+    public static long MaxStamina(long level, long purchases) => MaxStaminaWithUpgrades(BaseMaxStamina(level), purchases);
 
     /// <summary>Seconds per regrown point after <paramref name="purchases"/> Recovery Time upgrades (row +0xc).</summary>
     public static long StaminaRefillSecondsAfter(long purchases) => StaminaRefillSeconds - 10 * Math.Clamp(purchases, 0, StaminaUpgradeLimit);
