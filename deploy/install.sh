@@ -93,6 +93,7 @@ chown kns:kns "$preflight"
 preflight_port=18099
 while port_in_use "$preflight_port"; do preflight_port=$((preflight_port + 1)); done
 # Started inside the scratch folder: the server's content root is its working directory, which user kns must be able to read.
+# shellcheck disable=SC2016
 runuser -u kns -- env -i PATH=/usr/bin:/bin KNS_BIND=127.0.0.1 KNS_PORT=$preflight_port KNS_QUIET=1 \
     KNS_DB="$preflight/kns.sqlite" KNS_LOG_DIR="$preflight" KNS_WEB_ROOT="$candidate/web" DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1 \
     sh -c 'cd "$1" && exec "$2"' _ "$preflight" "$candidate/server/KnS.Server" >"$preflight/output.log" 2>&1 &

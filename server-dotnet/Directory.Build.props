@@ -8,8 +8,9 @@
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <AnalysisLevel>8.0-recommended</AnalysisLevel>
     <!-- CA1848/CA1727: LoggerMessage source generators are overkill for this server's log volume.
-         CA1305: protocol text is invariant ASCII. CA1707: test names use underscores. -->
-    <NoWarn>$(NoWarn);CA1848;CA1727;CA1305;CA1707;CA2007;CA1031;CA1062</NoWarn>
+         CA1305: protocol text is invariant ASCII. CA1707: test names use underscores.
+         CA1859: newer .NET SDKs widen concrete-type checks on local IReadOnlyList variables. -->
+    <NoWarn>$(NoWarn);CA1848;CA1727;CA1305;CA1707;CA1859;CA2007;CA1031;CA1062</NoWarn>
     <!-- One restore serves local builds/tests and the linux-x64 / linux-arm64 deploy publish, so they stop invalidating each
          other's obj/project.assets.json and scripts/dotnet.ps1 can skip restore when nothing changed. -->
     <RuntimeIdentifiers Condition="!$(MSBuildProjectName.EndsWith('Tests'))">linux-x64;linux-arm64</RuntimeIdentifiers>
