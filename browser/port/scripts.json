@@ -1,0 +1,4 @@
+{
+  "engine": ["cpu.js", "runtime.js", "jni.js", "gl.js"],
+  "port": ["native_hooks.js", "achievement-sync.js", "game.js", "java_shim.js", "account.js", "asset-validation.js", "controls.js", "ui_overrides.js", "web.js"]
+}

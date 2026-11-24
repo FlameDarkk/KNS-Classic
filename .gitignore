@@ -1,0 +1,40 @@
+# Generated build & runtime outputs
+build/
+work/
+**/bin/
+**/obj/
+**/__pycache__/
+*.pyc
+*.pyo
+
+# Secrets, local deployment config, and player databases
+adminkey.txt
+deploy/remote.local.json
+deploy/kns.env
+*.env
+!*.env.example
+keys/
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+*.db
+*.jks
+*.keystore
+*.pem
+*.key
+*.pfx
+*.p12
+
+# Built web bundles (rebuilt by build.bat browser / studio)
+browser/kns.html
+browser/kns-studio.html
+
+# Optional local SDK drop-in
+tools/dotnet8/
+
+# OS and IDE files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.user

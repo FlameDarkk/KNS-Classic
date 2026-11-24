@@ -1,0 +1,6 @@
+# HTTPS for a domain of your own: KNS_DOMAIN (in kns.env) must point at this machine. Caddy fetches and renews the
+# certificate by itself. With docker compose the game service is "kns"; on a plain VM use 127.0.0.1:8092 instead.
+{$KNS_DOMAIN} {
+	encode gzip
+	reverse_proxy kns:8092
+}

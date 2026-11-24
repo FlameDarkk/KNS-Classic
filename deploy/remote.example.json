@@ -1,0 +1,5 @@
+{
+  "host": "user@203.0.113.10",
+  "key": "%USERPROFILE%\\.ssh\\id_ed25519",
+  "public_url": "https://example.com/kns/"
+}

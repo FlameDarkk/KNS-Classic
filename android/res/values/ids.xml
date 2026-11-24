@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <item type="id" name="com_facebook_picker_list_view" />
+    <item type="id" name="com_facebook_picker_activity_circle" />
+    <item type="id" name="com_facebook_login_activity_progress_bar" />
+    <item type="id" name="com_facebook_picker_row_activity_circle" />
+    <item type="id" name="com_facebook_picker_checkbox" />
+    <item type="id" name="com_facebook_picker_image" />
+    <item type="id" name="com_facebook_picker_profile_pic_stub" />
+    <item type="id" name="com_facebook_picker_title" />
+    <item type="id" name="com_facebook_picker_checkbox_stub" />
+    <item type="id" name="com_facebook_picker_list_section_header" />
+    <item type="id" name="com_facebook_picker_top_bar" />
+    <item type="id" name="com_facebook_picker_done_button" />
+    <item type="id" name="com_facebook_picker_divider" />
+    <item type="id" name="com_facebook_picker_title_bar_stub" />
+    <item type="id" name="com_facebook_picker_title_bar" />
+    <item type="id" name="picker_subtitle" />
+    <item type="id" name="com_facebook_search_bar_view" />
+    <item type="id" name="com_facebook_picker_search_text" />
+    <item type="id" name="com_facebook_body_frame" />
+    <item type="id" name="com_facebook_tooltip_bubble_view_top_pointer" />
+    <item type="id" name="com_facebook_button_xout" />
+    <item type="id" name="com_facebook_tooltip_bubble_view_text_body" />
+    <item type="id" name="com_facebook_tooltip_bubble_view_bottom_pointer" />
+    <item type="id" name="com_facebook_usersettingsfragment_logo_image" />
+    <item type="id" name="com_facebook_usersettingsfragment_profile_name" />
+    <item type="id" name="com_facebook_usersettingsfragment_login_button" />
+    <item type="id" name="DeviceLayout" />
+    <item type="id" name="ViewPortPaddingLayout" />
+    <item type="id" name="ViewPortSizeLayout" />
+    <item type="id" name="GLViewLayout" />
+    <item type="id" name="TextInputLayout" />
+    <item type="id" name="UserInputLayout" />
+    <item type="id" name="ProgressBarLayout" />
+    <item type="id" name="progressBar" />
+    <item type="id" name="WebViewTouchLayout" />
+    <item type="id" name="WebViewLayout" />
+    <item type="id" name="webView" />
+    <item type="id" name="webViewCancel" />
+    <item type="id" name="videoView2" />
+    <item type="id" name="button1" />
+    <item type="id" name="menu_settings" />
+</resources>

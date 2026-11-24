@@ -1,0 +1,10 @@
+{
+  "name": "apk-cpu-engine",
+  "version": "1.0.0",
+  "description": "Run 32-bit Android ARM native game libraries (.so) in the browser or Node: ARM JIT, Android userland, JNI and OpenGL ES 1.1 on WebGL.",
+  "main": "index.js",
+  "private": true,
+  "scripts": {
+    "test": "node --test tests/*.test.cjs"
+  }
+}
