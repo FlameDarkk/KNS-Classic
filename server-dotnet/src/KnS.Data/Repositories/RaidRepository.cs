@@ -52,7 +52,7 @@ public sealed class RaidRepository(DataSession session)
     {
         if (session.Execute($"{session.Dialect.InsertOrIgnore} INTO raid_rank_settlement(raid_no) VALUES(@raidNumber)", new { raidNumber }) == 1)
         {
-            IReadOnlyList<RaidScoreRecord> ranking = GetRanking(raidNumber, int.MaxValue).Where(row => row.Plays > 0).ToList();
+            List<RaidScoreRecord> ranking = GetRanking(raidNumber, int.MaxValue).Where(row => row.Plays > 0).ToList();
             for (int i = 0; i < ranking.Count; i++)
             {
                 session.Execute("INSERT INTO raid_rank_snapshot(raid_no,user_no,rank_no,total_users) VALUES(@raidNumber,@userNumber,@rank,@total)",

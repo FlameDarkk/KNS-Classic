@@ -45,7 +45,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts\dotnet.ps1 test serv
 
 ## Guidelines
 
-- **Zero compiler warnings**: `server-dotnet/Directory.Build.props` enables `<TreatWarningsAsErrors>true</TreatWarningsAsErrors>` with `latest-recommended` analyzers.
+- **Zero compiler warnings**: `server-dotnet/Directory.Build.props` enables `<TreatWarningsAsErrors>true</TreatWarningsAsErrors>` with `8.0-recommended` analyzers.
 - **Keep `apk-cpu-engine/` game-agnostic**: `apk-cpu-engine/tests/` enforces that no game-specific symbols or package names leak into the engine.
 - **Schema changes**: If you add or rename a table in `server-dotnet/src/KnS.Data/Schema/GameSchema.cs`, classify it in `tools/reset_progress.py` (`KEEP` or `WIPE_GLOBAL`) and verify `tools/tests/test_reset_progress.py` passes.
 - **Never commit secrets or local runtime files**: Keep `adminkey.txt`, `deploy/kns.env`, `deploy/remote.local.json`, `keys/`, `work/`, `build/`, and `*.sqlite` out of commits.

@@ -6,7 +6,7 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
-    <AnalysisLevel>latest-recommended</AnalysisLevel>
+    <AnalysisLevel>8.0-recommended</AnalysisLevel>
     <!-- CA1848/CA1727: LoggerMessage source generators are overkill for this server's log volume.
          CA1305: protocol text is invariant ASCII. CA1707: test names use underscores. -->
     <NoWarn>$(NoWarn);CA1848;CA1727;CA1305;CA1707;CA2007;CA1031;CA1062</NoWarn>
