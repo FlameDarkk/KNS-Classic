@@ -13,7 +13,8 @@ public sealed record PlayerAccount(
     long Experience,
     long MaxExperience,
     long PurchasedItemSlots,
-    long PurchasedAllySlots)
+    long PurchasedAllySlots,
+    long PurchasedAllyItemSlots = 0)
 {
     /// <summary>What the player holds of a currency item (gold or gems); 0 for any other item.</summary>
     public long BalanceOf(long currencyItemId) => currencyItemId switch
@@ -25,10 +26,16 @@ public sealed record PlayerAccount(
 
     public bool CanAfford(Price price) => BalanceOf(price.PriceItemId) >= price.Amount;
 
-    public long PurchasedSlots(BagKind bag) => bag == BagKind.Items ? PurchasedItemSlots : PurchasedAllySlots;
+    public long PurchasedSlots(BagKind bag) => bag switch
+    {
+        BagKind.Items => PurchasedItemSlots,
+        BagKind.Allies => PurchasedAllySlots,
+        BagKind.FellowItems => PurchasedAllyItemSlots,
+        _ => 0,
+    };
 
     /// <summary>The account of a player with no gameuser row yet.</summary>
     public static PlayerAccount NewPlayer(long maxExperience) => new(
         StoredPlayerDefaults.Gold, StoredPlayerDefaults.Gems, StoredPlayerDefaults.HeroPcid,
-        StoredPlayerDefaults.Level, 0, maxExperience, 0, 0);
+        StoredPlayerDefaults.Level, 0, maxExperience, 0, 0, 0);
 }

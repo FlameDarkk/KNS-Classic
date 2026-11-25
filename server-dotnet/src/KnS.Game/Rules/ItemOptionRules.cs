@@ -11,11 +11,13 @@ public static class ItemOptionRules
 
     /// <summary>
     /// master_item_option_count's source for a stage mode ("Nomal" is the data's spelling).
+    /// Armor dropped in event dungeons (stage_mode 11..15) uses the native "Event_Armor" table.
     /// </summary>
-    public static string OptionCountSource(long stageMode) => stageMode switch
+    public static string OptionCountSource(long stageMode, long category = 0) => stageMode switch
     {
         2 => "Hard",
         ShopRules.ItemShopOptionMode => "ItemShop",
+        >= 11 and <= 15 when category == 300000 => "Event_Armor",
         _ => "Nomal",
     };
 

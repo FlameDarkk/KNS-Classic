@@ -25,6 +25,9 @@ public sealed record PlayerAccountRecord
 
     /// <summary>Ally bag slots bought (user_fellow_inventory_size_cash).</summary>
     public long PurchasedAllySlots { get; init; }
+
+    /// <summary>Ally equipment bag slots bought (user_fellow_item_inventory_size_cash).</summary>
+    public long PurchasedAllyItemSlots { get; init; }
 }
 
 public sealed record StaminaRecord
@@ -33,11 +36,12 @@ public sealed record StaminaRecord
     public long LastGain { get; init; }
 }
 
-/// <summary>The two bags a player can buy slots for.</summary>
+/// <summary>The three bags a player can buy slots for.</summary>
 public enum BagKind
 {
     Items,
     Allies,
+    FellowItems,
 }
 
 /// <summary>Players (gameuser) and the extra devices linked to them (device_link).</summary>
@@ -134,7 +138,8 @@ public sealed class PlayerRepository(DataSession session)
     public PlayerAccountRecord? FindAccount(long userNumber) =>
         session.QueryFirstOrDefault<PlayerAccountRecord>(
             "SELECT gold AS Gold, cash AS Gems, hero_pcid AS HeroPcid, level AS Level, exp AS Experience,"
-            + " inventory_cash AS PurchasedItemSlots, fellow_inventory_cash AS PurchasedAllySlots"
+            + " inventory_cash AS PurchasedItemSlots, fellow_inventory_cash AS PurchasedAllySlots,"
+            + " fellow_item_inventory_cash AS PurchasedAllyItemSlots"
             + " FROM gameuser WHERE user_no=@userNumber",
             new { userNumber });
 
@@ -180,7 +185,7 @@ public sealed class PlayerRepository(DataSession session)
     /// <summary>Writes a new player's whole start: wallet, level, active hero and bag slots.</summary>
     public void SetStart(long userNumber, long gold, long gems, long level) =>
         session.Execute(
-            "UPDATE gameuser SET gold=@gold, cash=@gems, level=@level, exp=0, hero_pcid=@heroPcid, inventory_cash=0, fellow_inventory_cash=0"
+            "UPDATE gameuser SET gold=@gold, cash=@gems, level=@level, exp=0, hero_pcid=@heroPcid, inventory_cash=0, fellow_inventory_cash=0, fellow_item_inventory_cash=0"
             + " WHERE user_no=@userNumber",
             new { gold, gems, level, heroPcid = StoredPlayerDefaults.HeroPcid, userNumber });
 
@@ -194,7 +199,13 @@ public sealed class PlayerRepository(DataSession session)
 
     public void SetPurchasedSlots(long userNumber, BagKind bag, long purchasedSlots)
     {
-        string column = bag == BagKind.Items ? "inventory_cash" : "fellow_inventory_cash";
+        string column = bag switch
+        {
+            BagKind.Items => "inventory_cash",
+            BagKind.Allies => "fellow_inventory_cash",
+            BagKind.FellowItems => "fellow_item_inventory_cash",
+            _ => throw new ArgumentOutOfRangeException(nameof(bag)),
+        };
         session.Execute($"UPDATE gameuser SET {column}=@purchasedSlots WHERE user_no=@userNumber", new { purchasedSlots, userNumber });
     }
 }

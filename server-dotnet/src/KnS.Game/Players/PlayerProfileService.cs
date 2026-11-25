@@ -24,7 +24,7 @@ public sealed class PlayerProfileService(
 
         return new PlayerAccount(
             record.Gold, record.Gems, record.HeroPcid, record.Level, record.Experience,
-            MaxExperienceAt(record.Level), record.PurchasedItemSlots, record.PurchasedAllySlots);
+            MaxExperienceAt(record.Level), record.PurchasedItemSlots, record.PurchasedAllySlots, record.PurchasedAllyItemSlots);
     }
 
     /// <summary>Adds (or, with negative amounts, takes) gold and gems.</summary>
@@ -196,6 +196,7 @@ public sealed class PlayerProfileService(
             FreeItemSlots = PlayerRules.FreeItemSlots,
             PurchasedItemSlots = account.PurchasedItemSlots,
             PurchasedAllySlots = account.PurchasedAllySlots,
+            PurchasedAllyItemSlots = account.PurchasedAllyItemSlots,
             ActiveHeroPcid = account.HeroPcid,
             HeroAttack = PlayerRules.HeroAttack,
             HeroDefence = PlayerRules.HeroDefence,

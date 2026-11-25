@@ -90,10 +90,6 @@ internal sealed class GameSchema(DataSession session, string masterDataDirectory
                 feature_key {Sql.KeyTextColumn} PRIMARY KEY, enabled {Sql.IntegerColumn},
                 created_date {Sql.RealColumn}, update_date {Sql.RealColumn})
             """);
-        double now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() / 1000.0;
-        session.Execute(
-            $"{Sql.InsertOrIgnore} INTO feature_flag(feature_key, enabled, created_date, update_date) VALUES('fourth_fellow', 1, @now, @now)",
-            new { now });
         // Server-wide values. progress_epoch: when every player's progress was last reset (tools/reset_progress.py);
         // clients drop their local game save once when it changes (GET/POST /api/progress).
         session.Execute($"""
@@ -130,6 +126,7 @@ internal sealed class GameSchema(DataSession session, string masterDataDirectory
             ("exp", 0),
             ("inventory_cash", 0),
             ("fellow_inventory_cash", 0),
+            ("fellow_item_inventory_cash", 0),
         ]);
 
         // Heroes a user owns; hero_no is the per-user id the client echoes back (the hero_pcid).
@@ -236,6 +233,15 @@ internal sealed class GameSchema(DataSession session, string masterDataDirectory
             """);
         // When user_no last used friend_no as a dungeon helper (the helper then gets Friendship Points by mail).
         AddMissingIntegerColumns("friend_link", [("last_help", 0)]);
+
+        // Daily social caps from dt_etc_setting.json (requests 30/day, deletes 5/day, FP send/recv 100/day).
+        session.Execute($"""
+            CREATE TABLE IF NOT EXISTS friend_daily_limit(
+                user_no {Sql.IntegerColumn}, day_no {Sql.IntegerColumn},
+                requests {Sql.IntegerColumn} DEFAULT 0, deletes {Sql.IntegerColumn} DEFAULT 0,
+                sent_fp {Sql.IntegerColumn} DEFAULT 0, recv_fp {Sql.IntegerColumn} DEFAULT 0,
+                PRIMARY KEY(user_no, day_no))
+            """);
 
         // Ally missions on a player's board. status 0 = open, 1 = running (end_time, the allies and soldiers sent), rewards "item:value;...".
         session.Execute($"""
@@ -432,7 +438,7 @@ internal sealed class GameSchema(DataSession session, string masterDataDirectory
             """);
 
         AddMissingIntegerColumns("item", [("upgrade", 0), ("attack", 0), ("defence", 0), ("hp", 0), ("locked", 0)]);
-        AddMissingIntegerColumns("pvp_stat", [("refresh_until", 0), ("refresh_seed", 0)]);
+        AddMissingIntegerColumns("pvp_stat", [("refresh_until", 0), ("refresh_seed", 0), ("recovery_count", 0), ("recovery_day", 0), ("streak_until", 0)]);
         // last_seen: last authorized request (Last Played). last_sync: server_time sent by protocol 60, the client's clock base.
         AddMissingIntegerColumns("gameuser", [("last_seen", 0), ("last_sync", 0)]);
     }

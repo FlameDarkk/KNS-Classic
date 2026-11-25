@@ -73,7 +73,8 @@ public sealed class FriendRequestListHandler(PlayerDirectory directory, FriendSe
         {
             Count = list.Count,
             Page = request.Parameters.GetInt64("page", 1),
-            RequestCount = friends.CountOutgoing(userNumber),
+            RequestCount = friends.RequestedToday(userNumber),
+            DeleteCount = friends.DeletedToday(userNumber),
             Friends = list,
         });
     }
@@ -156,8 +157,10 @@ public sealed class FriendDeleteHandler(PlayerDirectory directory, FriendService
     {
         logger.LogInformation("Friend delete: {Params}", request.Parameters.ToJsonString());
         long friendNumber = request.Parameters.GetInt64("friend_user_no");
-        friends.RemoveLinks(directory.ResolveCurrent(request).UserNumber, [friendNumber]);
-        return ProtocolResult.Success(new FriendDeleteResponse(friendNumber, 0));
+        long userNumber = directory.ResolveCurrent(request).UserNumber;
+        if (!friends.TryDeleteFriend(userNumber, friendNumber))
+            return ProtocolResult.Refused("daily friend delete limit reached");
+        return ProtocolResult.Success(new FriendDeleteResponse(friendNumber, friends.DeletedToday(userNumber)));
     }
 }
 

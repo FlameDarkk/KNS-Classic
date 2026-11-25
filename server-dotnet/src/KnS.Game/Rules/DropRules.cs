@@ -41,9 +41,6 @@ public static class DropRules
 
     public const long GoldBoxPerMonsterLevel = 50;
 
-    /// <summary>Equipment type (master_item.type: 2 weapon, 3, 4, 5-9) = the item id's 100000 band in every seed row.</summary>
-    public static long EquipmentType(long itemId) => itemId / 100000;
-
     /// <summary>
     /// master_stage_reward slot groups, each rolled once with a cumulative 0-99 roll like the
     /// client's GetDropItemID: at most one slot per group hits.

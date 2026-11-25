@@ -79,4 +79,24 @@ public sealed class FriendRepository(DataSession session)
     public void SetLastHelp(long userNumber, long friendNumber, long now) =>
         session.Execute("UPDATE friend_link SET last_help=@now WHERE user_no=@userNumber AND friend_no=@friendNumber",
             new { userNumber, friendNumber, now });
+
+    public (int Requests, int Deletes, int SentFp, int RecvFp) GetDailyLimits(long userNumber, long day)
+    {
+        IReadOnlyList<IReadOnlyDictionary<string, object?>> rows = session.QueryRows(
+            "SELECT requests, deletes, sent_fp, recv_fp FROM friend_daily_limit WHERE user_no=@userNumber AND day_no=@day",
+            new { userNumber, day });
+        if (rows.Count == 0) return (0, 0, 0, 0);
+        return (Convert.ToInt32(rows[0]["requests"]), Convert.ToInt32(rows[0]["deletes"]),
+            Convert.ToInt32(rows[0]["sent_fp"]), Convert.ToInt32(rows[0]["recv_fp"]));
+    }
+
+    public void AddDailyUsage(long userNumber, long day, int requests = 0, int deletes = 0, int sentFp = 0, int recvFp = 0)
+    {
+        session.Execute(
+            $"{session.Dialect.InsertOrIgnore} INTO friend_daily_limit(user_no, day_no, requests, deletes, sent_fp, recv_fp) VALUES(@userNumber, @day, 0, 0, 0, 0)",
+            new { userNumber, day });
+        session.Execute(
+            "UPDATE friend_daily_limit SET requests=requests+@requests, deletes=deletes+@deletes, sent_fp=sent_fp+@sentFp, recv_fp=recv_fp+@recvFp WHERE user_no=@userNumber AND day_no=@day",
+            new { userNumber, day, requests, deletes, sentFp, recvFp });
+    }
 }

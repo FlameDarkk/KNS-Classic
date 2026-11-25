@@ -96,11 +96,11 @@ public sealed class AllowlistTests : IDisposable
     [Fact]
     public async Task The_admin_flags_endpoint_lists_and_changes_a_flag()
     {
-        JsonObject before = await AdminPathAsync("/admin/flags", null, HttpMethod.Get);
-        Assert.True(before["flags"]!.AsArray().Single(f => f!["feature_key"]!.GetValue<string>() == "fourth_fellow")!["enabled"]!.GetValue<bool>());
+        JsonObject created = await AdminPathAsync("/admin/flags", new { feature_key = "sample_flag", enabled = true });
+        Assert.True(created["flags"]!.AsArray().Single(f => f!["feature_key"]!.GetValue<string>() == "sample_flag")!["enabled"]!.GetValue<bool>());
 
-        JsonObject after = await AdminPathAsync("/admin/flags", new { feature_key = "fourth_fellow", enabled = false });
-        Assert.False(after["flags"]!.AsArray().Single(f => f!["feature_key"]!.GetValue<string>() == "fourth_fellow")!["enabled"]!.GetValue<bool>());
+        JsonObject after = await AdminPathAsync("/admin/flags", new { feature_key = "sample_flag", enabled = false });
+        Assert.False(after["flags"]!.AsArray().Single(f => f!["feature_key"]!.GetValue<string>() == "sample_flag")!["enabled"]!.GetValue<bool>());
     }
 
     [Fact]

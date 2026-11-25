@@ -1,7 +1,6 @@
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using KnS.Data.Repositories;
-using KnS.Game.Access;
 using KnS.Game.Gateway;
 using KnS.Game.Players;
 using KnS.Game.Rules;
@@ -23,7 +22,6 @@ namespace KnS.Game.Protocols.Fellows;
 public sealed class FellowSetHandler(
     PlayerDirectory directory,
     FellowRepository fellows,
-    FeatureFlags flags,
     ILogger<FellowSetHandler> logger) : IProtocolHandler
 {
     public ProtocolResult Handle(GatewayRequest request)
@@ -35,8 +33,7 @@ public sealed class FellowSetHandler(
             return ProtocolResult.Refused("invalid ally setup");
         }
         HashSet<long> owned = fellows.GetOwnedFellowNumbers(userNumber);
-        bool fourthSlot = FellowRules.WantsFourthSlot(request.Parameters, flags.IsEnabled(FeatureFlags.FourthFellow));
-        var slots = new long[FellowRules.SlotsFor(setupType, fourthSlot)];
+        var slots = new long[FellowRules.SlotsPerSetup];
 
         foreach (JsonObject entry in request.Parameters.GetList("fellows").OfType<JsonObject>())
         {
@@ -57,20 +54,6 @@ public sealed class FellowSetHandler(
         for (int position = 0; position < slots.Length; position++)
         {
             fellows.SetSlot(userNumber, setupType, position, slots[position]);
-        }
-
-        // The original never sends position 3, so it never clears it; a fellow it moves into positions 0-2
-        // must not also stay in the rebuild's fourth slot.
-        if (setupType == FellowRules.DungeonSetupType && slots.Length == FellowRules.SlotsPerSetup)
-        {
-            long fourth = fellows.GetFilledSlots(userNumber)
-                .Where(slot => slot.SetupType == setupType && slot.Position == FellowRules.SlotsPerSetup)
-                .Select(slot => slot.FellowNumber)
-                .FirstOrDefault();
-            if (fourth != 0 && slots.Contains(fourth))
-            {
-                fellows.SetSlot(userNumber, setupType, FellowRules.SlotsPerSetup, 0);
-            }
         }
 
         logger.LogInformation("Fellow set: type {Type} -> [{Slots}]", setupType, string.Join(",", slots));

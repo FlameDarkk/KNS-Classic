@@ -20,11 +20,18 @@ public static class ArenaRules
 {
     public static readonly long[] ResultPoints = [14, 9, 4, 3, 2, 1, 0];
     public const long WeekSeconds = 7 * 24 * 3600;
-    public const long RecoveryGems = 5;
     public const long RefreshGems = 5;
     public const long RefreshCooldownSeconds = 1800;
     public const int ErrnoRefreshCooldown = 22007;
     public const long MaxStamina = 10;
+    /// <summary>dt_etc_setting.json Init_Value "Pvp_MaxConsecutiveScore": max bonus points per consecutive win.</summary>
+    public const long MaxConsecutiveScore = 10;
+    /// <summary>Window (seconds) to keep an active win streak alive (buff_remain_time).</summary>
+    public const long StreakDurationSeconds = 3600;
+    /// <summary>dt_etc_setting.json PvpRecovery: 1st refill = 3 Gems, 2nd = 5 Gems, 3rd+ = 10 Gems per UTC day.</summary>
+    public static long RecoveryGemsForCount(long usedToday) => usedToday switch { <= 0 => 3, 1 => 5, _ => 10 };
+    /// <summary>Bonus points for a consecutive win: 0 on 1st win, +1 on 2nd, ..., capped at +10 (Pvp_MaxConsecutiveScore).</summary>
+    public static long ConsecutiveBonus(long newStreak) => newStreak >= 2 ? Math.Min(newStreak - 1, MaxConsecutiveScore) : 0;
     public const long KnockOutResult = 1;
     public const long WinResult = 2;
     public const long LossResult = 6;
@@ -357,6 +364,17 @@ public sealed class ArenaService(PvpRepository pvp, FriendService friends, Playe
     /// <summary>The arena rank for a profile card's pvp_rank; 0 ("No Records") before the first battle this season.</summary>
     public long ProfileRank(long userNumber) => pvp.Get(userNumber).Battles > 0 ? GetInfo(userNumber).Rank : 0;
 
+    public long NextRecoveryGems(long userNumber)
+    {
+        CurrentSeason();
+        PvpStatRecord stat = pvp.Get(userNumber);
+        long today = Now / 86400;
+        long used = stat.RecoveryDay == today ? stat.RecoveryCount : 0;
+        return ArenaRules.RecoveryGemsForCount(used);
+    }
+
+    public void RecordRecovery(long userNumber) => pvp.RecordRecovery(userNumber, Now / 86400);
+
     public UserPvpInfo GetInfo(long userNumber)
     {
         CurrentSeason();
@@ -364,13 +382,18 @@ public sealed class ArenaService(PvpRepository pvp, FriendService friends, Playe
         IReadOnlyList<PvpStatRecord> ranking = pvp.GetRanking(10_000);
         PvpStatRecord stat = pvp.Get(userNumber);
         int index = ranking.ToList().FindIndex(r => r.UserNumber == userNumber);
+        long now = Now;
+        bool expired = stat.Streak > 0 && stat.StreakUntil > 0 && now > stat.StreakUntil;
+        long streak = expired ? 0 : stat.Streak;
+        long buffRemain = streak > 0 && stat.StreakUntil > now ? stat.StreakUntil - now : 0;
         return new UserPvpInfo
         {
             TotalBattles = stat.Battles,
             TotalUsers = ranking.Count,
             TotalWins = stat.Wins,
             Points = stat.Points,
-            Streak = stat.Streak,
+            Streak = streak,
+            BuffRemainTime = buffRemain,
             Rank = index < 0 ? 0 : index + 1,
         };
     }
@@ -460,8 +483,17 @@ public sealed class ArenaService(PvpRepository pvp, FriendService friends, Playe
         return ranking.Skip(skip).Take(take).Select((r, i) => Entry(viewer, r, skip + i + 1)).ToList();
     }
 
-    public void RecordResult(long userNumber, long result) =>
-        pvp.RecordBattle(userNumber, ArenaRules.PointsFor(result), ArenaRules.IsWin(result));
+    public void RecordResult(long userNumber, long result)
+    {
+        long now = Now;
+        bool won = ArenaRules.IsWin(result);
+        PvpStatRecord stat = pvp.Get(userNumber);
+        long currentStreak = stat.Streak > 0 && (stat.StreakUntil == 0 || now <= stat.StreakUntil) ? stat.Streak : 0;
+        long nextStreak = won ? currentStreak + 1 : 0;
+        long streakUntil = won ? now + ArenaRules.StreakDurationSeconds : 0;
+        long points = ArenaRules.PointsFor(result) + (won ? ArenaRules.ConsecutiveBonus(nextStreak) : 0);
+        pvp.RecordBattle(userNumber, points, won, nextStreak, streakUntil);
+    }
 
     public Player? Find(long userNumber) => players.FindByUserNumber(userNumber) is { } record ? Player.From(record) : null;
 
@@ -580,7 +612,7 @@ public sealed class ArenaOpponentsHandler(PlayerDirectory directory, ArenaServic
             Info = arena.GetInfo(userNumber),
             Goods = profiles.GetGoods(userNumber),
             RemainRefreshTime = arena.GetRemainRefreshTime(userNumber),
-            Recovery = new PvpRecovery(ArenaRules.RecoveryGems),
+            Recovery = new PvpRecovery(arena.NextRecoveryGems(userNumber)),
         });
     }
 }
@@ -777,13 +809,15 @@ public sealed class ArenaRecoverHandler(PlayerDirectory directory, PlayerProfile
         {
             return ProtocolResult.Refused("Battle Spirits are already full");
         }
-        if (!profiles.TrySpend(userNumber, Rules.CurrencyItems.Gems, ArenaRules.RecoveryGems))
+        long price = arena.NextRecoveryGems(userNumber);
+        if (!profiles.TrySpend(userNumber, Rules.CurrencyItems.Gems, price))
         {
             return ProtocolResult.Refused("not enough gems");
         }
 
+        arena.RecordRecovery(userNumber);
         arena.FillSpirit(userNumber);
-        return ProtocolResult.Success(new ArenaRecoverResponse(profiles.GetGoods(userNumber), new PvpRecovery(ArenaRules.RecoveryGems)));
+        return ProtocolResult.Success(new ArenaRecoverResponse(profiles.GetGoods(userNumber), new PvpRecovery(arena.NextRecoveryGems(userNumber))));
     }
 }
 

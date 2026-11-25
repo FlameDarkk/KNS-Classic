@@ -26,10 +26,10 @@ public sealed class FellowService(
             .Select(entry => new FellowBookEntry(entry.FellowId, entry.RewardReceived, entry.Experience, entry.Level))
             .ToList();
 
-    /// <summary>The filled slots; position 3 only for a client that opted in to the fourth one.</summary>
-    public IReadOnlyList<ActiveFellowSlot> GetActiveSlots(long userNumber, bool fourthSlot = false) =>
+    /// <summary>The filled slots (positions 0..2 per setup).</summary>
+    public IReadOnlyList<ActiveFellowSlot> GetActiveSlots(long userNumber) =>
         fellows.GetFilledSlots(userNumber)
-            .Where(slot => fourthSlot || slot.Position < FellowRules.SlotsPerSetup)
+            .Where(slot => slot.Position < FellowRules.SlotsPerSetup)
             .Select(slot => new ActiveFellowSlot(slot.SetupType, slot.Position, slot.FellowNumber))
             .ToList();
 
@@ -108,14 +108,14 @@ public sealed class FellowService(
     /// fellow number). Exp counts within the current level like the hero's;
     /// master_fellow_level fills the bar and master_fellow.max_level caps it.
     /// </summary>
-    public IReadOnlyList<object> AwardDungeonExperience(long userNumber, long gain, bool fourthSlot = false)
+    public IReadOnlyList<object> AwardDungeonExperience(long userNumber, long gain)
     {
         Dictionary<long, long> fellowInSlot = fellows.GetFilledSlots(userNumber)
             .Where(slot => slot.SetupType == FellowRules.DungeonSetupType)
             .ToDictionary(slot => slot.Position, slot => slot.FellowNumber);
 
         var awarded = new List<long?>();
-        for (long position = 0; position < FellowRules.SlotsFor(FellowRules.DungeonSetupType, fourthSlot); position++)
+        for (long position = 0; position < FellowRules.SlotsPerSetup; position++)
         {
             FellowProgressRecord? fellow = fellows.FindProgress(userNumber, fellowInSlot.GetValueOrDefault(position));
             if (fellow is null)

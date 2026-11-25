@@ -91,6 +91,7 @@ public static class GameServiceCollectionExtensions
         AddHandler<AchievementClaimHandler>(services, GameProtocol.AchievementClaim);
         AddHandler<AchievementListHandler>(services, GameProtocol.AchievementList);
         AddHandler<AchievementRewardListHandler>(services, GameProtocol.AchievementRewardList);
+        AddHandler<AchievementDoingHandler>(services, GameProtocol.AchievementDoing);
         AddHandler<StoryListHandler>(services, GameProtocol.StoryList);
         AddHandler<StoryCompleteHandler>(services, GameProtocol.StoryComplete);
         AddHandler<ItemDrawHandler>(services, GameProtocol.ItemDraw);
@@ -119,6 +120,7 @@ public static class GameServiceCollectionExtensions
         AddHandler<HeroBuyHandler>(services, GameProtocol.HeroBuy);
         AddHandler<HeroChangeHandler>(services, GameProtocol.HeroChange);
         AddHandler<ExpandAllyBagHandler>(services, GameProtocol.ExpandAllyBag);
+        AddHandler<ExpandFellowItemBagHandler>(services, GameProtocol.ExpandFellowItemBag);
         AddHandler<FellowSetHandler>(services, GameProtocol.FellowSet);
         AddHandler<FellowPowerUpHandler>(services, GameProtocol.FellowPowerUp);
         AddHandler<FellowLockHandler>(services, GameProtocol.FellowLock);

@@ -416,7 +416,13 @@ public sealed class MasterDataRepository(DataSession session)
 
     public BagExpansion? GetBagExpansion(BagKind bag, long expansionLevel)
     {
-        string table = bag == BagKind.Items ? "master_inventory_expansion" : "master_fellow_inventory_expansion";
+        string table = bag switch
+        {
+            BagKind.Items => "master_inventory_expansion",
+            BagKind.Allies => "master_fellow_inventory_expansion",
+            BagKind.FellowItems => "master_fellow_item_inventory_expansion",
+            _ => throw new ArgumentOutOfRangeException(nameof(bag)),
+        };
         return session.QueryFirstOrDefault<BagExpansion>(
             $"SELECT price_item_id AS PriceItemId, price AS Price, add_space AS AddedSlots, total_space AS TotalSlots FROM {table}"
             + " WHERE expansion_level=@expansionLevel",

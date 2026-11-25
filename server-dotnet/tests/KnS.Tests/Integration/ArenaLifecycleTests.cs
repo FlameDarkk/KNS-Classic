@@ -88,9 +88,23 @@ public class ArenaLifecycleTests(ServerFixture server)
             Assert.Equal(100, server.Scalar($"SELECT cash FROM gameuser WHERE user_no={user}"));
         }
         server.Execute($"UPDATE user_goods SET count=0 WHERE user_no={user} AND item_id=1900017");
-        Assert.Equal(0, (await server.CallGatewayAsync(407, new { }, user))["errno"]!.GetValue<long>());
+        JsonObject first = await server.CallGatewayAsync(407, new { }, user);
+        Assert.Equal(0, first["errno"]!.GetValue<long>());
         Assert.Equal(10, server.Scalar($"SELECT count FROM user_goods WHERE user_no={user} AND item_id=1900017"));
-        Assert.Equal(95, server.Scalar($"SELECT cash FROM gameuser WHERE user_no={user}"));
+        Assert.Equal(97, server.Scalar($"SELECT cash FROM gameuser WHERE user_no={user}"));
+        Assert.Equal(5, first["master_pvp_recovery_info"]!["PvpRecoveryValue"]!.GetValue<long>());
+
+        server.Execute($"UPDATE user_goods SET count=0 WHERE user_no={user} AND item_id=1900017");
+        JsonObject second = await server.CallGatewayAsync(407, new { }, user);
+        Assert.Equal(0, second["errno"]!.GetValue<long>());
+        Assert.Equal(92, server.Scalar($"SELECT cash FROM gameuser WHERE user_no={user}"));
+        Assert.Equal(10, second["master_pvp_recovery_info"]!["PvpRecoveryValue"]!.GetValue<long>());
+
+        server.Execute($"UPDATE user_goods SET count=0 WHERE user_no={user} AND item_id=1900017");
+        JsonObject third = await server.CallGatewayAsync(407, new { }, user);
+        Assert.Equal(0, third["errno"]!.GetValue<long>());
+        Assert.Equal(82, server.Scalar($"SELECT cash FROM gameuser WHERE user_no={user}"));
+        Assert.Equal(10, third["master_pvp_recovery_info"]!["PvpRecoveryValue"]!.GetValue<long>());
     }
 
     [Fact]

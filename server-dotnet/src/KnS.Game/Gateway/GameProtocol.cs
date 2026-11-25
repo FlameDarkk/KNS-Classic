@@ -88,6 +88,7 @@ public enum GameProtocol
     FriendOutgoing = 804,
     FellowItemList = 330,
     FellowItemCraft = 331,
+    ExpandFellowItemBag = 332,
     FellowItemEquip = 333,
     FellowItemLock = 334,
     FellowItemPowerUp = 335,
@@ -101,6 +102,7 @@ public enum GameProtocol
     AchievementList = 121,
     AchievementRewardList = 122,
     AchievementClaim = 123,
+    AchievementDoing = 124,
     AltarCraft = 1101,
     ChatServerInfo = 701,
 }

@@ -26,24 +26,6 @@ public static class FellowRules
     /// <summary>The fellow setup dungeons use (the Ally screen edits this one).</summary>
     public const long DungeonSetupType = 3;
 
-    /// <summary>
-    /// The dungeon setup's slots for a client that asks for them (the rebuild). The original client keeps
-    /// <see cref="SlotsPerSetup"/>: its three setups sit back to back in memory, so it must never be sent or
-    /// handed a fourth position (docs/rebuild-fellows.md "Fourth slot").
-    /// </summary>
-    public const int DungeonPartySlots = 4;
-
-    /// <summary>The request parameter only the rebuild sends: <c>party_slots</c> = <see cref="DungeonPartySlots"/>.</summary>
-    public const string PartySlotsParameter = "party_slots";
-
-    /// <summary>True when the fourth-slot feature flag is on and the request opts in to the fourth dungeon slot.</summary>
-    public static bool WantsFourthSlot(RequestParameters parameters, bool featureEnabled) =>
-        featureEnabled && parameters.GetInt64OrFallback(PartySlotsParameter) >= DungeonPartySlots;
-
-    /// <summary>The slots of a setup for a client that did (or did not) opt in to the fourth one.</summary>
-    public static int SlotsFor(long setupType, bool fourthSlot) =>
-        fourthSlot && setupType == DungeonSetupType ? DungeonPartySlots : SlotsPerSetup;
-
     /// <summary>The highest fellow_upgrade ("+5").</summary>
     public const long MaxUpgrade = 5;
 

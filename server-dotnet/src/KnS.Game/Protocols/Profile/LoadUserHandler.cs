@@ -18,9 +18,9 @@ public sealed class LoadUserHandler(
     InventoryService inventory,
     FellowService fellows,
     GameOptions options,
-    FeatureFlags flags,
     BuffRepository buffs,
     PlayerRepository players,
+    Arena.ArenaService arena,
     TimeProvider clock) : IProtocolHandler
 {
     public ProtocolResult Handle(GatewayRequest request)
@@ -34,7 +34,7 @@ public sealed class LoadUserHandler(
         {
             UserInfo = profiles.BuildUserInfo(player),
             Goods = profiles.GetGoods(userNumber),
-            ActiveFellows = fellows.GetActiveSlots(userNumber, FellowRules.WantsFourthSlot(request.Parameters, flags.IsEnabled(FeatureFlags.FourthFellow))),
+            ActiveFellows = fellows.GetActiveSlots(userNumber),
             ServerTime = now.ToUnixTimeSeconds(),
             // ParsingDataToWTime splits this on "- :"; the original server sent its local time.
             ServerDateTime = TimeZoneInfo.ConvertTime(now, clock.LocalTimeZone).ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture),
@@ -45,6 +45,7 @@ public sealed class LoadUserHandler(
             Fellows = fellows.GetFellowInfos(userNumber),
             FellowBook = fellows.GetBook(userNumber),
             Buffs = Shop.BuffInfo.For(buffs.GetAll(userNumber)),
+            PvpRecovery = new PvpRecoveryInfo(arena.NextRecoveryGems(userNumber)),
         });
     }
 }

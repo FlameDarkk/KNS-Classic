@@ -46,7 +46,7 @@ public sealed class ItemOptionRoller(
 
     private List<long> RollOptionIds(ItemOptionRule rule, long stageMode)
     {
-        IReadOnlyList<OptionCountWeight> weights = masterData.GetOptionCountWeights(ItemOptionRules.OptionCountSource(stageMode));
+        IReadOnlyList<OptionCountWeight> weights = masterData.GetOptionCountWeights(ItemOptionRules.OptionCountSource(stageMode, rule.Category));
         long count;
         if (options.DropEverything)
         {

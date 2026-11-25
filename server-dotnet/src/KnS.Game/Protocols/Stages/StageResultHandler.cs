@@ -26,7 +26,6 @@ public sealed class StageResultHandler(
     StageProgressService progress,
     FellowService fellows,
     GatewayTrace trace,
-    FeatureFlags flags,
     DailyQuestRepository quests,
     StoryService storyService,
     MasterDataRepository masterData,
@@ -93,16 +92,15 @@ public sealed class StageResultHandler(
             string.Join(",", claimedItems.Select(i => i.ItemNumber)), string.Join(",", credited.Select(o => $"{o.ItemId}x{o.Count}")));
 
         JsonNode? stageResult = parameters.CopyOrDefault("stage_result", 1);
-        bool fourthSlot = FellowRules.WantsFourthSlot(parameters, flags.IsEnabled(FeatureFlags.FourthFellow));
         IReadOnlyList<object> fellowExperience = Enumerable.Repeat<object>(
-            EmptyObject.Instance, FellowRules.SlotsFor(FellowRules.DungeonSetupType, fourthSlot)).ToList();
+            EmptyObject.Instance, FellowRules.SlotsPerSetup).ToList();
         storyService.RecordStageResult(userNumber, stageId, cleared, parameters.GetList("achievement_list"), credited);
         if (cleared)
         {
             long gain = profiles.AwardStageExperience(userNumber, stageId);
             PlayerAccount account = profiles.GetAccount(userNumber);
             logger.LogInformation("Stage result: +{Gain} exp -> Lv.{Level} {Exp}/{MaxExp}", gain, account.Level, account.Experience, account.MaxExperience);
-            fellowExperience = fellows.AwardDungeonExperience(userNumber, gain, fourthSlot);
+            fellowExperience = fellows.AwardDungeonExperience(userNumber, gain);
             progress.RecordClear(userNumber, stageId, start.StageMode);
             if (stageId is >= 3000000 and < 3100000)
             {

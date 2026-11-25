@@ -80,9 +80,16 @@ public sealed class FriendService(
     public IReadOnlyList<long> SendRequests(long userNumber, IEnumerable<long> targets)
     {
         long now = clock.GetUtcNow().ToUnixTimeSeconds();
+        long day = now / 86400;
+        int requestedToday = friends.GetDailyLimits(userNumber, day).Requests;
         var sent = new List<long>();
         foreach (long target in targets.Distinct().Where(t => t > 0 && t != userNumber && players.FindByUserNumber(t) is not null))
         {
+            if (requestedToday + sent.Count >= FriendRules.DailyRequestLimit)
+            {
+                break;
+            }
+
             if (friends.GetStatus(userNumber, target) is not null)
             {
                 continue;
@@ -105,6 +112,11 @@ public sealed class FriendService(
             sent.Add(target);
         }
 
+        if (sent.Count > 0)
+        {
+            friends.AddDailyUsage(userNumber, day, requests: sent.Count);
+        }
+
         return sent;
     }
 
@@ -115,9 +127,16 @@ public sealed class FriendService(
     public (int Sent, long Points) SendPoints(long userNumber, IEnumerable<long> targets)
     {
         long now = clock.GetUtcNow().ToUnixTimeSeconds();
+        long day = now / 86400;
+        int sentToday = friends.GetDailyLimits(userNumber, day).SentFp;
         int sent = 0;
         foreach (long target in targets.Distinct())
         {
+            if (sentToday + sent >= FriendRules.DailySendPointsLimit)
+            {
+                break;
+            }
+
             if (friends.GetStatus(userNumber, target) != FriendRepository.Accepted
                 || friends.GetLastSent(userNumber, target) + FriendRules.SendCooldownSeconds > now)
             {
@@ -125,13 +144,18 @@ public sealed class FriendService(
             }
 
             friends.SetLastSent(userNumber, target, now);
-            MailFriendPoints(userNumber, target, FriendRules.ReceiveReward, "sent you Friendship Points.", now);
+            if (friends.GetDailyLimits(target, day).RecvFp < FriendRules.DailyReceivePointsLimit)
+            {
+                MailFriendPoints(userNumber, target, FriendRules.ReceiveReward, "sent you Friendship Points.", now);
+                friends.AddDailyUsage(target, day, recvFp: 1);
+            }
             sent++;
         }
 
         long points = sent * FriendRules.SendReward;
         if (points > 0)
         {
+            friends.AddDailyUsage(userNumber, day, sentFp: sent);
             goods.Add(userNumber, CurrencyItems.FriendshipPoints, points);
         }
 
@@ -162,8 +186,35 @@ public sealed class FriendService(
         return true;
     }
 
-    public int SentToday(long userNumber) =>
-        friends.CountSentSince(userNumber, clock.GetUtcNow().ToUnixTimeSeconds() - FriendRules.SendCooldownSeconds);
+    public int SentToday(long userNumber)
+    {
+        long now = clock.GetUtcNow().ToUnixTimeSeconds();
+        return Math.Max(friends.GetDailyLimits(userNumber, now / 86400).SentFp,
+            friends.CountSentSince(userNumber, now - FriendRules.SendCooldownSeconds));
+    }
+
+    public int RequestedToday(long userNumber) =>
+        friends.GetDailyLimits(userNumber, clock.GetUtcNow().ToUnixTimeSeconds() / 86400).Requests;
+
+    public int DeletedToday(long userNumber) =>
+        friends.GetDailyLimits(userNumber, clock.GetUtcNow().ToUnixTimeSeconds() / 86400).Deletes;
+
+    /// <summary>Deletes an accepted friend within the daily delete limit (5/day). Returns false when the daily cap is reached.</summary>
+    public bool TryDeleteFriend(long userNumber, long friendNumber)
+    {
+        long day = clock.GetUtcNow().ToUnixTimeSeconds() / 86400;
+        bool isAccepted = friends.GetStatus(userNumber, friendNumber) == FriendRepository.Accepted;
+        if (isAccepted && friends.GetDailyLimits(userNumber, day).Deletes >= FriendRules.DailyDeleteLimit)
+        {
+            return false;
+        }
+        friends.Remove(userNumber, friendNumber);
+        if (isAccepted)
+        {
+            friends.AddDailyUsage(userNumber, day, deletes: 1);
+        }
+        return true;
+    }
 
     /// <summary>Accepts the requests these players sent. Returns the players who are now friends.</summary>
     public IReadOnlyList<Player> AcceptRequests(long userNumber, IEnumerable<long> requesters)
@@ -225,6 +276,7 @@ public sealed class FriendService(
             HeroAttack = info.HeroAttack,
             HeroDefence = info.HeroDefence,
             HeroHp = info.HeroHp,
+            HelpRemainTime = Math.Max(0, friends.GetLastHelp(viewer, player.UserNumber) + FriendRules.HelpCooldownSeconds - now),
             SendRemainTime = Math.Max(0, friends.GetLastSent(viewer, player.UserNumber) + FriendRules.SendCooldownSeconds - now),
         };
     }

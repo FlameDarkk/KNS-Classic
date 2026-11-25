@@ -25,6 +25,15 @@ public sealed class ExpandAllyBagHandler(BagExpander expander) : IProtocolHandle
 }
 
 /// <summary>
+/// Protocol 332: buys ally equipment bag slots (case @0x15dcb0;
+/// master_fellow_item_inventory_expansion, 133 native levels from dt_shop_pkg_140 table 12). Same reply as 106/301.
+/// </summary>
+public sealed class ExpandFellowItemBagHandler(BagExpander expander) : IProtocolHandler
+{
+    public ProtocolResult Handle(GatewayRequest request) => expander.Expand(request, BagKind.FellowItems);
+}
+
+/// <summary>
 /// The shared body of the bag expansions. Request {expansion_level}: the client picks the
 /// expansion row for its current bought slots and has already checked the price.
 /// </summary>

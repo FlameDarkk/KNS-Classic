@@ -30,16 +30,14 @@ root.KnsUiOverrides = {
     { name: 'lobby HIVE plate', tex: '128x128/be30489c', scene: LOBBY, box: [930, 185, 1100, 355] },
     { name: 'lobby HIVE icon', tex: '64x32/db2b97bc', scene: LOBBY, box: [930, 185, 1100, 355] },
     { name: 'lobby gamepad icon', tex: '128x64/11aa0dab', scene: LOBBY, box: [350, 360, 505, 480] },
-    { name: 'lobby Daily button (under Friend)', tex: '*', scene: LOBBY, box: [0, 350, 168, 500] },
-    { name: 'lobby EXP button (under Messages)', tex: '*', scene: LOBBY, box: [168, 350, 340, 500] },
     // The File Check plate (signed out) and the Log Out plate (signed in) are one sprite; only the label tells them apart.
     { name: 'title File Check plate', tex: '256x64/9ac525e9', scene: TITLE, box: [0, 950, 300, 1110],
       when: ui => /File Check/.test(ui.lastLabel(/File Check|^\s*Log Out\s*$/)) },
   ],
   touchAreas: [
     // Lobby rows: 7 Friend, 8 Messages, 9 Story, 10 Settings, 15 unlabeled slot right of Settings (draws nothing),
-    // 16 HIVE, 18 Daily, 19 EXP, 29 gamepad.
-    { name: 'lobby HIVE, empty slot, Daily, EXP, gamepad', table: 'touchPopChar', scene: LOBBY, ids: [15, 16, 18, 19, 29] },
+    // 16 HIVE, 18 Daily (enabled), 19 EXP (enabled), 29 gamepad.
+    { name: 'lobby HIVE, empty slot, gamepad', table: 'touchPopChar', scene: LOBBY, ids: [15, 16, 29] },
   ],
 };
 })(typeof globalThis !== 'undefined' ? globalThis : this);

@@ -63,3 +63,29 @@ public sealed record AchievementListResponse(
 
 public sealed record AchievementRewardListResponse(
     [property: JsonPropertyName("achievement_reward_infos")] IReadOnlyList<AchievementRewardInfo> Rewards);
+
+/// <summary>
+/// Protocol 124 (parser case @0x15af68), sent from Lobby, Character popup, and WebViewCB to report and refresh
+/// in-progress achievement counters: returns <c>update_achievement_info</c> parsed by <c>ParsingDataToAchieveDoing</c>@0x14b1f4.
+/// </summary>
+public sealed class AchievementDoingHandler(
+    PlayerDirectory directory, AchievementRepository achievements, PlayerRepository players) : IProtocolHandler
+{
+    private const long LevelAchievementType = 40000;
+
+    public ProtocolResult Handle(GatewayRequest request)
+    {
+        long user = directory.ResolveCurrent(request).UserNumber;
+        var infos = new List<AchievementDoingInfo>
+        {
+            new(0, LevelAchievementType, 0, players.FindAccount(user)?.Level ?? 1),
+        };
+        infos.AddRange(achievements.Progress(user)
+            .Where(row => row.Type != LevelAchievementType)
+            .Select(row => new AchievementDoingInfo(0, row.Type, row.SubType, row.Count)));
+        return ProtocolResult.Success(new AchievementDoingResponse(infos));
+    }
+}
+
+public sealed record AchievementDoingResponse(
+    [property: JsonPropertyName("update_achievement_info")] IReadOnlyList<AchievementDoingInfo> Updates);

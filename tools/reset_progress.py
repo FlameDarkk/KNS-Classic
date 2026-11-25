@@ -27,7 +27,7 @@ KEEP = {
 # Global tables without a player column that are progress all the same.
 WIPE_GLOBAL = {"raid_rank_settlement", "chat_history"}
 PLAYER_COLUMNS = {"user_no", "friend_no", "opponent_no"}
-FRESH = {"gold": 0, "cash": 0, "hero_pcid": 1, "level": 1, "exp": 0, "inventory_cash": 0, "fellow_inventory_cash": 0}
+FRESH = {"gold": 0, "cash": 0, "hero_pcid": 1, "level": 1, "exp": 0, "inventory_cash": 0, "fellow_inventory_cash": 0, "fellow_item_inventory_cash": 0}
 
 
 def tables(db):

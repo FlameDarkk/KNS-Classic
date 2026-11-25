@@ -10,6 +10,9 @@ public sealed record PvpStatRecord
     public long Streak { get; init; }
     public long RefreshUntil { get; init; }
     public long RefreshSeed { get; init; }
+    public long RecoveryCount { get; init; }
+    public long RecoveryDay { get; init; }
+    public long StreakUntil { get; init; }
 }
 
 public sealed record PvpPlayRecord
@@ -106,7 +109,7 @@ public sealed class PvpRepository(DataSession session)
     public void CompletePlay(long userNumber, long result) =>
         session.Execute("UPDATE pvp_play SET result=@result,complete=1 WHERE user_no=@userNumber", new { userNumber, result });
 
-    private const string Columns = "user_no AS UserNumber, points AS Points, battles AS Battles, wins AS Wins, streak AS Streak, refresh_until AS RefreshUntil, refresh_seed AS RefreshSeed";
+    private const string Columns = "user_no AS UserNumber, points AS Points, battles AS Battles, wins AS Wins, streak AS Streak, refresh_until AS RefreshUntil, refresh_seed AS RefreshSeed, recovery_count AS RecoveryCount, recovery_day AS RecoveryDay, streak_until AS StreakUntil";
 
     public PvpStatRecord Get(long userNumber) =>
         session.QueryFirstOrDefault<PvpStatRecord>($"SELECT {Columns} FROM pvp_stat WHERE user_no=@userNumber", new { userNumber })
@@ -116,17 +119,25 @@ public sealed class PvpRepository(DataSession session)
     {
         session.Execute($"{session.Dialect.InsertOrIgnore} INTO pvp_stat(user_no) VALUES(@userNumber)", new { userNumber });
         session.Execute(
-            "UPDATE pvp_stat SET refresh_until=@refreshUntil, refresh_seed=refresh_seed+1, streak=CASE WHEN @resetStreak=1 THEN 0 ELSE streak END WHERE user_no=@userNumber",
+            "UPDATE pvp_stat SET refresh_until=@refreshUntil, refresh_seed=refresh_seed+1, streak=CASE WHEN @resetStreak=1 THEN 0 ELSE streak END, streak_until=CASE WHEN @resetStreak=1 THEN 0 ELSE streak_until END WHERE user_no=@userNumber",
             new { userNumber, refreshUntil, resetStreak = resetStreak ? 1 : 0 });
     }
 
-    public void RecordBattle(long userNumber, long points, bool won)
+    public void RecordRecovery(long userNumber, long day)
     {
         session.Execute($"{session.Dialect.InsertOrIgnore} INTO pvp_stat(user_no) VALUES(@userNumber)", new { userNumber });
         session.Execute(
-            "UPDATE pvp_stat SET points=points+@points, battles=battles+1, wins=wins+@win, streak=CASE WHEN @win=1 THEN streak+1 ELSE 0 END WHERE user_no=@userNumber",
-            new { userNumber, points, win = won ? 1 : 0 });
-        new AchievementRepository(session).RecordProgress(userNumber, 40082, 0, Get(userNumber).Streak);
+            "UPDATE pvp_stat SET recovery_count=CASE WHEN recovery_day=@day THEN recovery_count+1 ELSE 1 END, recovery_day=@day WHERE user_no=@userNumber",
+            new { userNumber, day });
+    }
+
+    public void RecordBattle(long userNumber, long points, bool won, long nextStreak, long streakUntil)
+    {
+        session.Execute($"{session.Dialect.InsertOrIgnore} INTO pvp_stat(user_no) VALUES(@userNumber)", new { userNumber });
+        session.Execute(
+            "UPDATE pvp_stat SET points=points+@points, battles=battles+1, wins=wins+@win, streak=@nextStreak, streak_until=@streakUntil WHERE user_no=@userNumber",
+            new { userNumber, points, win = won ? 1 : 0, nextStreak, streakUntil });
+        new AchievementRepository(session).RecordProgress(userNumber, 40082, 0, nextStreak);
     }
 
     /// <summary>Players by points, best first; players without a record count as 0 points.</summary>

@@ -47,6 +47,7 @@ public static class MasterTables
         new("master_stage_reward", "master_stage_rewards.csv", ["stage_id", "slot"]),
         new("master_stage_random_reward", "master_stage_random_rewards.csv"),
         new("master_fellow_inventory_expansion", "master_fellow_inventory_expansions.csv", ReplaceStoredRows: true),
+        new("master_fellow_item_inventory_expansion", "master_fellow_item_inventory_expansions.csv", ReplaceStoredRows: true),
         new("master_stage_attainment", "master_stage_attainments.csv", ReplaceStoredRows: true),
         new("master_item_option", "master_item_options.csv"),
         new("master_item_option_count", "master_item_option_counts.csv", ["stage_mode_name", "option_count"]),

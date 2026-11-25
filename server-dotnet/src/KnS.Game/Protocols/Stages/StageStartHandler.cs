@@ -60,6 +60,7 @@ public sealed class StageStartHandler(
         }
         UserInfo userInfo = profiles.BuildUserInfo(player);
         IReadOnlyList<GoodsEntry> goods = profiles.GetGoods(player.UserNumber);
+        StageGoldSettings? goldSettings = masterData.GetStageGoldSettings(stageId);
         DropItemList drops = rewards.OfferDrops(player.UserNumber, stageId, stageMode, clock.GetUtcNow().ToUnixTimeSeconds(), staminaCost);
         IReadOnlyList<EventDropOffer> eventDrops = rewards.OfferEventItems(player.UserNumber);
         Quests.DailyQuestInfo? dailyQuest = null;
@@ -83,6 +84,8 @@ public sealed class StageStartHandler(
             Stage = new StageSetup
             {
                 StageNumber = stageId,
+                GoldPileCount = goldSettings is { PileCount: > 0 } ? goldSettings.PileCount : DropRules.GoldPileCount,
+                GoldPileMax = goldSettings is { PileMax: > 0 } ? goldSettings.PileMax : DropRules.GoldPileMax,
                 // The client reads monster_info_<N> and <N+1>, N = the selected stage's id.
                 MonsterInfo = new Dictionary<string, object>
                 {
