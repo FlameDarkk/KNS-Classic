@@ -80,17 +80,21 @@ public sealed class AccountEditorEndpoint(ServerOptions options)
             await AdminAccess.WriteAsync(context, 200, StudioEventEditor.Snapshot(db, context.RequestServices.GetRequiredService<TimeProvider>()));
             return;
         }
-        if (action is "arena_time" or "arena_number" or "arena_end" or "arena_next")
+        if (action is "arena_time" or "arena_number" or "arena_end" or "arena_next" or "arena_ally")
         {
             long value = 0;
             if (action == "arena_time" && !Number(body, "seconds", 1, ArenaRules.WeekSeconds, out value))
             { await Error(context, 400, "remaining time must be between 1 second and 7 days"); return; }
             if (action == "arena_number" && !Number(body, "season", 1, 1_000_000, out value))
             { await Error(context, 400, "season must be between 1 and 1000000"); return; }
+            if (action == "arena_ally" && (!Number(body, "featured_ally", 0, int.MaxValue, out value)
+                || (value != 0 && !ArenaRules.LimitedAllyPairs.Any(pair => pair.SixStarId == value))))
+            { await Error(context, 400, "unknown arena featured ally"); return; }
             db.BeginTransaction();
             var arena = context.RequestServices.GetRequiredService<ArenaService>();
             if (action == "arena_time") arena.SetRemaining(value);
             else if (action == "arena_number") arena.SetSeasonNumber(value);
+            else if (action == "arena_ally") arena.SetFeaturedAlly(value);
             else if (action == "arena_end") arena.EndSeason();
             else arena.NextSeason();
             JsonObject status = ArenaStatus(arena);
@@ -322,12 +326,28 @@ public sealed class AccountEditorEndpoint(ServerOptions options)
     private static JsonObject ArenaStatus(ArenaService arena)
     {
         PvpControlRecord current = arena.CurrentSeason();
-        return new JsonObject { ["arena"] = new JsonObject
+        ArenaLimitedAllyPair featured = ArenaService.FeaturedAlly(current);
+        return new JsonObject
         {
-            ["season"] = current.SeasonNumber,
-            ["remain_time"] = arena.SecondsRemaining(current),
-            ["closed"] = current.Closed != 0,
-        } };
+            ["arena"] = new JsonObject
+            {
+                ["season"] = current.SeasonNumber,
+                ["remain_time"] = arena.SecondsRemaining(current),
+                ["closed"] = current.Closed != 0,
+                ["featured_ally"] = featured.SixStarId,
+                ["featured_ally_five_star"] = featured.FiveStarId,
+                ["featured_ally_override"] = current.FeaturedAlly,
+                ["featured_ally_name"] = featured.SixStarName,
+                ["featured_ally_five_star_name"] = featured.FiveStarName,
+            },
+            ["arena_allies"] = JsonSerializer.SerializeToNode(ArenaRules.LimitedAllyPairs.Select(pair => new
+            {
+                six_star_id = pair.SixStarId,
+                five_star_id = pair.FiveStarId,
+                six_star_name = pair.SixStarName,
+                five_star_name = pair.FiveStarName,
+            })),
+        };
     }
 
     private static JsonObject RaidStatus(RaidDungeonInfo current) => new()

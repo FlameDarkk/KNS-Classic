@@ -63,7 +63,7 @@ def build_game(root, web):
         digest.update(name.encode('utf-8') + b'\0' + hashlib.sha256(data).digest())
         assets.append(path)
     data_dir = 'kns_data-' + digest.hexdigest()[:16]
-    parts = ['<!doctype html><html><head><meta charset="utf-8"><title>Knights N Squires</title>',
+    parts = ['<!doctype html><html><head><meta charset="utf-8"><title>Knights N Squires Classic</title>',
              '<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">',
              (port / 'shell.css.html').read_text(encoding='utf-8'),
              '</head><body><canvas id="game"></canvas><div id="status">Loading...</div>',

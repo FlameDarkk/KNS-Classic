@@ -25,8 +25,9 @@ public sealed record DailyRewardResponse(
 
 /// <summary>
 /// Protocols 602/603: FinishTutorial@0x10c09c sends one when a tutorial ends. Both reply cases (@0x15d660, @0x15d612)
-/// read user_info and update_item_etc_info. The request carries quest_id; native dt_quest_140 rewards are credited
-/// directly to the wallet once per account (5000002 = 30 Gems, 5000005 = 1,000 Gold, 5000012 = 1,000 Gold).
+/// read quest_infos[0], user_info and update_item_etc_info, and NetworkEvent (@0x1533e4, @0x15343a) immediately calls
+/// StartTutorial(quest_id) when quest_id is 5000001..5000009 (chaining 5000002's 30 Gems into 5000003's forced shop draw).
+/// Native dt_quest_140 rewards are credited directly to the wallet once per account (5000002 = 30 Gems, 5000005/5000012 = 1,000 Gold).
 /// </summary>
 public sealed class TutorialRewardHandler(PlayerDirectory directory, PlayerProfileService profiles, LoginRewardService rewards)
     : IProtocolHandler
@@ -34,12 +35,14 @@ public sealed class TutorialRewardHandler(PlayerDirectory directory, PlayerProfi
     public ProtocolResult Handle(GatewayRequest request)
     {
         Player player = directory.ResolveCurrent(request);
-        rewards.FinishTutorialQuest(player.UserNumber, request.Parameters.GetInt64("quest_id"));
-        return ProtocolResult.Success(new TutorialRewardResponse(profiles.BuildUserInfo(player), profiles.GetGoods(player.UserNumber)));
+        TutorialFinishResult finished = rewards.FinishTutorialQuest(player.UserNumber, request.Parameters.GetInt64("quest_id"));
+        IReadOnlyList<QuestInfo> quests = finished.NextQuest > 0 ? [new QuestInfo(finished.NextQuest)] : [];
+        return ProtocolResult.Success(new TutorialRewardResponse(quests, profiles.BuildUserInfo(player), profiles.GetGoods(player.UserNumber)));
     }
 }
 
 public sealed record TutorialRewardResponse(
+    [property: JsonPropertyName("quest_infos")] IReadOnlyList<QuestInfo> Quests,
     [property: JsonPropertyName("user_info")] UserInfo User,
     [property: JsonPropertyName("update_item_etc_info")] IReadOnlyList<GoodsEntry> Goods);
 

@@ -26,16 +26,16 @@ if find server web -type f \( -name '*.sqlite*' -o -name '*.db' \) | grep -q .; 
     echo 'Refusing a package that contains a database.' >&2; exit 1
 fi
 
-exec 9>/run/lock/kns-install.lock
-flock -n 9 || { echo 'Another KnS install is running.' >&2; exit 1; }
+exec 9>/run/lock/kns-classic-install.lock
+flock -n 9 || { echo 'Another KnS-Classic install is running.' >&2; exit 1; }
 
-id kns >/dev/null 2>&1 || useradd --system --home-dir /var/lib/kns --shell /usr/sbin/nologin kns
-install -d -o kns -g kns -m 750 /var/lib/kns
-install -d -o root -g kns -m 750 /etc/kns
+id kns-classic >/dev/null 2>&1 || useradd --system --home-dir /var/lib/kns-classic --shell /usr/sbin/nologin kns-classic
+install -d -o kns-classic -g kns-classic -m 750 /var/lib/kns-classic
+install -d -o root -g kns-classic -m 750 /etc/kns-classic
 
-env_file=/etc/kns/kns.env
+env_file=/etc/kns-classic/kns.env
 if [[ ! -f $env_file ]]; then
-    install -o root -g kns -m 640 deploy/kns.env.example "$env_file"
+    install -o root -g kns-classic -m 640 deploy/kns.env.example "$env_file"
     echo "Created $env_file from the example; edit it, then run this again to apply changes."
 fi
 if grep -Eq '^KNS_ADMIN_KEY=$' "$env_file"; then
@@ -53,13 +53,13 @@ setting() {
     )
 }
 bind=$(setting KNS_BIND 127.0.0.1)
-port=$(setting KNS_PORT 8092)
+port=$(setting KNS_PORT 8093)
 probe_host="$bind"
 if [[ $probe_host == "0.0.0.0" || $probe_host == "::" || $probe_host == "*" || -z $probe_host ]]; then
     probe_host=127.0.0.1
 fi
-db=$(setting KNS_DB /var/lib/kns/kns.sqlite)
-case "$db" in /var/lib/kns/*) ;; *) echo "KNS_DB must live under /var/lib/kns (the only writable folder): $db" >&2; exit 1 ;; esac
+db=$(setting KNS_DB /var/lib/kns-classic/kns.sqlite)
+case "$db" in /var/lib/kns-classic/*) ;; *) echo "KNS_DB must live under /var/lib/kns-classic (the only writable folder): $db" >&2; exit 1 ;; esac
 
 port_in_use() {
     if command -v ss >/dev/null 2>&1; then
@@ -81,20 +81,20 @@ healthy() {
 }
 
 # Start the new build on disposable data first: a broken package never stops the running server.
-candidate=/opt/kns.next
+candidate=/opt/kns-classic.next
 rm -rf -- "$candidate"
 mkdir -p "$candidate"
 cp -a server web "$candidate/"
 [[ -d tools ]] && cp -a tools "$candidate/"
 chown -R root:root "$candidate"
 chmod -R a+rX "$candidate"
-preflight=$(mktemp -d /tmp/kns-preflight-XXXXXXXX)
-chown kns:kns "$preflight"
-preflight_port=18099
+preflight=$(mktemp -d /tmp/kns-classic-preflight-XXXXXXXX)
+chown kns-classic:kns-classic "$preflight"
+preflight_port=18199
 while port_in_use "$preflight_port"; do preflight_port=$((preflight_port + 1)); done
-# Started inside the scratch folder: the server's content root is its working directory, which user kns must be able to read.
+# Started inside the scratch folder: the server's content root is its working directory, which user kns-classic must be able to read.
 # shellcheck disable=SC2016
-runuser -u kns -- env -i PATH=/usr/bin:/bin KNS_BIND=127.0.0.1 KNS_PORT=$preflight_port KNS_QUIET=1 \
+runuser -u kns-classic -- env -i PATH=/usr/bin:/bin KNS_BIND=127.0.0.1 KNS_PORT=$preflight_port KNS_QUIET=1 \
     KNS_DB="$preflight/kns.sqlite" KNS_LOG_DIR="$preflight" KNS_WEB_ROOT="$candidate/web" DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1 \
     sh -c 'cd "$1" && exec "$2"' _ "$preflight" "$candidate/server/KnS.Server" >"$preflight/output.log" 2>&1 &
 preflight_pid=$!
@@ -113,40 +113,40 @@ if [[ $preflight_ok != true ]]; then
 fi
 rm -rf -- "$preflight"
 
-previous=/opt/kns.previous
+previous=/opt/kns-classic.previous
 rm -rf -- "$previous"
-systemctl stop kns-server 2>/dev/null || true
-[[ -d /opt/kns ]] && mv /opt/kns "$previous"
-mv "$candidate" /opt/kns
-install -o root -g root -m 644 deploy/kns-server.service /etc/systemd/system/kns-server.service
+systemctl stop kns-classic-server 2>/dev/null || true
+[[ -d /opt/kns-classic ]] && mv /opt/kns-classic "$previous"
+mv "$candidate" /opt/kns-classic
+install -o root -g root -m 644 deploy/kns-server.service /etc/systemd/system/kns-classic-server.service
 systemctl daemon-reload
-systemctl enable --quiet kns-server
-systemctl start kns-server
+systemctl enable --quiet kns-classic-server
+systemctl start kns-classic-server
 if ! healthy "http://$probe_host:$port/health"; then
-    journalctl -u kns-server -n 30 --no-pager >&2 || true
+    journalctl -u kns-classic-server -n 30 --no-pager >&2 || true
     if [[ -d $previous ]]; then
-        systemctl stop kns-server || true
-        rm -rf -- /opt/kns
-        mv "$previous" /opt/kns
-        systemctl start kns-server || true
+        systemctl stop kns-classic-server || true
+        rm -rf -- /opt/kns-classic
+        mv "$previous" /opt/kns-classic
+        systemctl start kns-classic-server || true
         echo 'The new server did not start; the previous version is running again. The database was not changed.' >&2
     fi
     exit 1
 fi
 rm -rf -- "$previous"
-echo "KnS server installed and healthy on $bind:$port (database $db)."
+echo "KnS-Classic server installed and healthy on $bind:$port (database $db)."
 
 if [[ $reset == true ]]; then
-    backup=/var/lib/kns/progress-reset-$(date -u +%Y%m%dT%H%M%SZ)
-    install -d -o kns -g kns -m 700 "$backup"
-    systemctl stop kns-server
-    if ! python3 /opt/kns/tools/reset_progress.py --db "$db" --apply --backup "$backup/kns.sqlite" > "$backup/report.json"; then
-        systemctl start kns-server || true
+    backup=/var/lib/kns-classic/progress-reset-$(date -u +%Y%m%dT%H%M%SZ)
+    install -d -o kns-classic -g kns-classic -m 700 "$backup"
+    systemctl stop kns-classic-server
+    if ! python3 /opt/kns-classic/tools/reset_progress.py --db "$db" --apply --backup "$backup/kns.sqlite" > "$backup/report.json"; then
+        systemctl start kns-classic-server || true
         echo "Progress reset failed; the database is unchanged. Report: $backup/report.json" >&2
         exit 1
     fi
-    chown -R kns:kns "$backup" "$db"* 2>/dev/null || true
-    systemctl start kns-server
+    chown -R kns-classic:kns-classic "$backup" "$db"* 2>/dev/null || true
+    systemctl start kns-classic-server
     healthy "http://$probe_host:$port/health"
     echo "Progress reset; backup and report in $backup."
 fi

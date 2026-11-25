@@ -23,13 +23,13 @@ public sealed class PvpRepository(DataSession session)
 {
     public PvpControlRecord Control(long now, long duration)
     {
-        session.Execute($"{session.Dialect.InsertOrIgnore} INTO pvp_control(id,generation,season_no,ends_at,closed) VALUES(1,1,1,@end,0)", new { end = now + duration });
+        session.Execute($"{session.Dialect.InsertOrIgnore} INTO pvp_control(id,generation,season_no,ends_at,closed,featured_ally) VALUES(1,1,1,@end,0,0)", new { end = now + duration });
         session.Execute("UPDATE pvp_control SET generation=generation WHERE id=1");
-        return session.QueryFirstOrDefault<PvpControlRecord>("SELECT generation AS Generation,season_no AS SeasonNumber,ends_at AS EndsAt,closed AS Closed FROM pvp_control WHERE id=1")!;
+        return session.QueryFirstOrDefault<PvpControlRecord>("SELECT generation AS Generation,season_no AS SeasonNumber,ends_at AS EndsAt,closed AS Closed,featured_ally AS FeaturedAlly FROM pvp_control WHERE id=1")!;
     }
 
     public void SetControl(PvpControlRecord control) => session.Execute(
-        "UPDATE pvp_control SET generation=@Generation,season_no=@SeasonNumber,ends_at=@EndsAt,closed=@Closed WHERE id=1", control);
+        "UPDATE pvp_control SET generation=@Generation,season_no=@SeasonNumber,ends_at=@EndsAt,closed=@Closed,featured_ally=@FeaturedAlly WHERE id=1", control);
 
     public void Archive(long generation)
     {
@@ -73,13 +73,13 @@ public sealed class PvpRepository(DataSession session)
         $"SELECT {Columns} FROM pvp_stat WHERE points>0 ORDER BY points DESC, user_no");
 
     /// <summary>Records a season ranking reward; false when this season already paid this player.</summary>
-    public bool TryMarkRankingPaid(long generation, long userNumber, long grade, long rank, long total) => session.Execute(
-        $"{session.Dialect.InsertOrIgnore} INTO pvp_rank_paid(generation,user_no,grade,ranking,total) VALUES(@generation,@userNumber,@grade,@rank,@total)",
-        new { generation, userNumber, grade, rank, total }) == 1;
+    public bool TryMarkRankingPaid(long generation, long userNumber, long grade, long rank, long total, long reward1Item = 0, long reward1Value = 0) => session.Execute(
+        $"{session.Dialect.InsertOrIgnore} INTO pvp_rank_paid(generation,user_no,grade,ranking,total,reward1_item,reward1_value) VALUES(@generation,@userNumber,@grade,@rank,@total,@reward1Item,@reward1Value)",
+        new { generation, userNumber, grade, rank, total, reward1Item, reward1Value }) == 1;
 
     /// <summary>The player's most recent paid season ranking reward, or null.</summary>
     public PvpRankPaidRecord? LastRankingPaid(long userNumber) => session.QueryFirstOrDefault<PvpRankPaidRecord>(
-        "SELECT generation AS Generation, grade AS Grade, ranking AS Rank, total AS Total FROM pvp_rank_paid"
+        "SELECT generation AS Generation, grade AS Grade, ranking AS Rank, total AS Total, reward1_item AS Reward1Item, reward1_value AS Reward1Value FROM pvp_rank_paid"
         + " WHERE user_no=@userNumber ORDER BY generation DESC LIMIT 1", new { userNumber });
 
     public void CaptureSeason(long userNumber, long generation) => session.Execute(
@@ -145,6 +145,8 @@ public sealed record PvpRankPaidRecord
     public long Grade { get; init; }
     public long Rank { get; init; }
     public long Total { get; init; }
+    public long Reward1Item { get; init; }
+    public long Reward1Value { get; init; }
 }
 
 public sealed record PvpControlRecord
@@ -153,4 +155,5 @@ public sealed record PvpControlRecord
     public long SeasonNumber { get; init; }
     public long EndsAt { get; init; }
     public long Closed { get; init; }
+    public long FeaturedAlly { get; init; }
 }

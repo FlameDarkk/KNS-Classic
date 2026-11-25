@@ -1,7 +1,7 @@
 'use strict';
 const $ = id => document.getElementById(id);
 const DATA = window.STUDIO_DATA;
-const KEY_STORAGE = 'kns-studio-key';
+const KEY_STORAGE = 'knsclassic-studio-key';
 const catalog = DATA.catalog;
 const masterById = new Map(catalog.map(item => [item.id, item]));
 const state = { admin: false, account: null, connected: false, connecting: false, writing: false, generation: 0,
@@ -34,7 +34,7 @@ const saveKey = value => { try { localStorage.removeItem(KEY_STORAGE); if (value
 // Studio is a separate tab: tell open game tabs whose player changed so they refresh by themselves.
 // user_no -1 means "every player" (raid-wide changes).
 const notifySync = (userNo = selected()) => {
-  try { const channel = new BroadcastChannel('kns-studio-sync'); channel.postMessage({ user_no: userNo }); channel.close(); } catch {}
+  try { const channel = new BroadcastChannel('knsclassic-studio-sync'); channel.postMessage({ user_no: userNo }); channel.close(); } catch {}
 };
 const context = () => ({ base: baseFor($('target').value), key: $('key').value, generation: state.generation });
 const current = ctx => ctx.generation === state.generation && ctx.base === baseFor($('target').value) && ctx.key === $('key').value;
@@ -130,10 +130,20 @@ async function loadRaid(ctx = context()) {
   $('raidBoss').value=String(raid.stage_id);$('raid').hidden=false;
 }
 async function loadArena(ctx = context()) {
-  const {arena}=await request('?arena=1',null,ctx); if (!current(ctx)) return;
-  if (!arena) throw new Error('Arena status is missing from the server response.');
-  $('arenaStatus').textContent=`Season ${arena.season} · ${arena.closed?'ended':'active'} · ${format(arena.remain_time)} seconds remaining`;
-  $('arenaNumber').value=arena.season;$('arena').hidden=false;
+  const data=await request('?arena=1',null,ctx); if (!current(ctx)) return;
+  const arena=data.arena; if (!arena) throw new Error('Arena status is missing from the server response.');
+  const allyMode=arena.featured_ally_override?'pinned':'auto';
+  const allyLabel=arena.featured_ally_name?` · ${arena.featured_ally_name} (${allyMode})`:'';
+  $('arenaStatus').textContent=`Season ${arena.season} · ${arena.closed?'ended':'active'}${allyLabel} · ${format(arena.remain_time)} seconds remaining`;
+  $('arenaNumber').value=arena.season;
+  if (Array.isArray(data.arena_allies)) {
+    $('arenaAlly').replaceChildren(
+      new Option('Auto (cycle by season)', '0'),
+      ...data.arena_allies.map(a=>new Option(`6★ ${a.six_star_name} / 5★ ${a.five_star_name}`, a.six_star_id))
+    );
+    $('arenaAlly').value=String(arena.featured_ally_override||0);
+  }
+  $('arena').hidden=false;
 }
 async function connect() {
   if (state.connecting||state.writing) return;
@@ -288,6 +298,7 @@ $('raidSetBoss').onclick=()=>run(()=>mutate({action:'raid_boss',stage_id:$('raid
 $('raidNext').onclick=()=>run(()=>mutate({action:'raid_next'},'Next raid started.',true,loadRaid));$('raidRefresh').onclick=()=>run(()=>loadRaid());
 bindNumeric('arenaSetTime',{input:'arenaSeconds',save:seconds=>mutate({action:'arena_time',seconds},'Arena timer updated.',true,loadArena)});
 bindNumeric('arenaSetNumber',{input:'arenaNumber',save:season=>mutate({action:'arena_number',season},'Arena season number updated.',true,loadArena)});
+$('arenaSetAlly').onclick=()=>run(()=>mutate({action:'arena_ally',featured_ally:$('arenaAlly').value},'Arena featured ally updated.',true,loadArena));
 $('arenaEnd').onclick=()=>run(()=>mutate({action:'arena_end'},'Arena season ended.',true,loadArena));$('arenaNext').onclick=()=>run(()=>mutate({action:'arena_next'},'Next Arena season started.',true,loadArena));$('arenaRefresh').onclick=()=>run(()=>loadArena());
 $('eventRefresh').onclick=()=>run(()=>loadEvents());$('eventStage').onchange=renderEvent;
 $('eventQuick').onsubmit=e=>{e.preventDefault();run(()=>mutate({action:'event_open',stage_id:$('eventStage').value,seconds:$('eventSeconds').value},'Event opened.',true,loadEvents));};

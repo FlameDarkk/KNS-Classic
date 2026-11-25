@@ -16,31 +16,36 @@ public sealed class LoginRewardTests(ServerFixture server)
     }
 
     [Fact]
-    public async Task First_login_pays_gift_and_calendar_into_mail_once_a_day()
+    public async Task First_login_pays_calendar_only_and_not_returning_gift()
     {
         long user = await PlayerAsync("login-first");
         JsonObject first = await server.CallGatewayAsync(67, new { }, user);
         Assert.Equal(0, Error(first));
-        Assert.Equal(1, first["reward_type"]!.GetValue<long>());
+        Assert.Equal(2, first["reward_type"]!.GetValue<long>());
         Assert.Equal(1, first["day"]!.GetValue<long>());
         JsonArray inbox = await InboxAsync(user);
-        Assert.Equal(2, inbox.Count);
-        Assert.Contains(inbox, mail => mail!["item_id1"]!.GetValue<long>() == 1900008 && mail["value1"]!.GetValue<long>() == 100_000);
+        Assert.Single(inbox);
         Assert.Contains(inbox, mail => mail!["item_id1"]!.GetValue<long>() == 1900014 && mail["value1"]!.GetValue<long>() == 20);
 
-        // Titles come from native text table 14: "Returning User Event Day 1 Reward", "Day 1 Reward".
-        Assert.Equal([9800101L, 9800201L], inbox.Select(mail => mail!["text_code"]!.GetValue<long>()).Order().ToArray());
+        // Title comes from native text table 14: "Day 1 Reward" (9800101), not "Returning User Event Day 1 Reward" (9800201).
+        Assert.Equal([9800101L], inbox.Select(mail => mail!["text_code"]!.GetValue<long>()).Order().ToArray());
 
         JsonObject again = await server.CallGatewayAsync(67, new { }, user);
         Assert.Equal(0, again["reward_type"]!.GetValue<long>());
-        Assert.Equal(2, (await InboxAsync(user)).Count);
+        Assert.Single(await InboxAsync(user));
     }
 
     [Fact]
-    public async Task Gift_runs_seven_login_days_then_calendar_shows()
+    public async Task Gift_runs_seven_login_days_for_returning_player_then_calendar_shows()
     {
         long user = await PlayerAsync("login-week");
-        for (long day = 1; day <= 7; day++)
+        server.Execute($"INSERT INTO login_reward(user_no,last_day,calendar_month,calendar_days,gift_day,gift_active,gift_used)"
+            + $" VALUES({user},{Today - 30},0,0,0,0,0)");
+        JsonObject firstBack = await server.CallGatewayAsync(67, new { }, user);
+        Assert.Equal(1, firstBack["reward_type"]!.GetValue<long>());
+        Assert.Equal(1, firstBack["day"]!.GetValue<long>());
+
+        for (long day = 2; day <= 7; day++)
         {
             JsonObject reply = await NextDayAsync(user);
             Assert.Equal(1, reply["reward_type"]!.GetValue<long>());
@@ -145,39 +150,54 @@ public sealed class LoginRewardTests(ServerFixture server)
         Assert.Equal(0, Error(await server.CallGatewayAsync(72, new { stage_no = 3000001, stage_result = 1, reward_gold = 0 }, user)));
         Assert.Equal(5000001, await QuestAsync(user));
 
-        // Finish 5000001 -> advances to 5000002 (no currency reward).
-        Assert.Equal(0, Error(await server.CallGatewayAsync(602, new { quest_id = 5000001 }, user)));
+        // Finish 5000001 -> advances to 5000002 and returns quest_infos=[5000002] so the client chains immediately.
+        JsonObject step1 = await server.CallGatewayAsync(602, new { quest_id = 5000001 }, user);
+        Assert.Equal(0, Error(step1));
+        Assert.Equal(5000002, Assert.Single(step1["quest_infos"]!.AsArray())!["quest_id"]!.GetValue<long>());
         Assert.Equal(5000002, await QuestAsync(user));
         Assert.Equal(0, server.Scalar($"SELECT cash FROM gameuser WHERE user_no={user}"));
 
-        // Finish 5000002 -> credits 30 Gems directly and advances to 5000003 (shop draw).
-        JsonObject gemsReply = await server.CallGatewayAsync(602, new { quest_id = 5000002 }, user);
+        // Finish 5000002 -> credits 30 Gems directly AND returns quest_infos=[5000003] so NetworkEvent calls StartTutorial(5000003).
+        JsonObject gemsReply = await server.CallGatewayAsync(603, new { quest_id = 5000002 }, user);
         Assert.Equal(0, Error(gemsReply));
+        Assert.Equal(5000003, Assert.Single(gemsReply["quest_infos"]!.AsArray())!["quest_id"]!.GetValue<long>());
         Assert.Equal(30, gemsReply["user_info"]!["user_cash"]!.GetValue<long>());
         Assert.Contains(gemsReply["update_item_etc_info"]!.AsArray(), item => item!["item_id"]!.GetValue<long>() == 1900009 && item["count"]!.GetValue<long>() == 30);
         Assert.Equal(5000003, await QuestAsync(user));
+
+        // Replaying 5000002 does not pay again or return a quest_id to restart.
+        JsonObject replayStep2 = await server.CallGatewayAsync(603, new { quest_id = 5000002 }, user);
+        Assert.Equal(0, Error(replayStep2));
+        Assert.Empty(replayStep2["quest_infos"]!.AsArray());
+        Assert.Equal(30, server.Scalar($"SELECT cash FROM gameuser WHERE user_no={user}"));
 
         // 5000003: Player spends those 30 Gems on Premium Ally Draw (9710006).
         JsonObject draw = await server.CallGatewayAsync(92, new { package_id = 9710006, use_ticket = 0, group_num = 1 }, user);
         Assert.Equal(0, Error(draw));
         Assert.Single(draw["fellow_info"]!.AsArray());
         Assert.Equal(0, server.Scalar($"SELECT cash FROM gameuser WHERE user_no={user}"));
-        Assert.Equal(0, Error(await server.CallGatewayAsync(602, new { quest_id = 5000003 }, user)));
+        JsonObject step3 = await server.CallGatewayAsync(602, new { quest_id = 5000003 }, user);
+        Assert.Equal(0, Error(step3));
+        Assert.Equal(5000004, Assert.Single(step3["quest_infos"]!.AsArray())!["quest_id"]!.GetValue<long>());
         Assert.Equal(5000004, await QuestAsync(user));
 
-        // 5000004 -> 5000005 -> +1,000 Gold, no custom Ally Ticket mail.
+        // 5000004 -> 5000005 -> +1,000 Gold, empty quest_infos at end of chain, no custom Ally Ticket mail.
         long goldBeforeFinish = server.Scalar($"SELECT gold FROM gameuser WHERE user_no={user}");
-        Assert.Equal(0, Error(await server.CallGatewayAsync(602, new { quest_id = 5000004 }, user)));
+        JsonObject step4 = await server.CallGatewayAsync(603, new { quest_id = 5000004 }, user);
+        Assert.Equal(0, Error(step4));
+        Assert.Equal(5000005, Assert.Single(step4["quest_infos"]!.AsArray())!["quest_id"]!.GetValue<long>());
         Assert.Equal(5000005, await QuestAsync(user));
         JsonObject finish = await server.CallGatewayAsync(603, new { quest_id = 5000005 }, user);
         Assert.Equal(0, Error(finish));
+        Assert.Empty(finish["quest_infos"]!.AsArray());
         Assert.Equal(goldBeforeFinish + 1000, finish["user_info"]!["user_gold"]!.GetValue<long>());
         Assert.Empty((await server.CallGatewayAsync(601, new { }, user))["quest_infos"]!.AsArray());
         Assert.Empty(await InboxAsync(user));
 
-        // 5000012 (Lv.7 Mission unlock tutorial) grants 1,000 Gold once.
+        // 5000012 (Lv.7 Mission unlock tutorial) grants 1,000 Gold once and returns empty quest_infos.
         JsonObject unlock = await server.CallGatewayAsync(602, new { quest_id = 5000012 }, user);
         Assert.Equal(0, Error(unlock));
+        Assert.Empty(unlock["quest_infos"]!.AsArray());
         Assert.Equal(goldBeforeFinish + 2000, unlock["user_info"]!["user_gold"]!.GetValue<long>());
         Assert.Equal(0, Error(await server.CallGatewayAsync(602, new { quest_id = 5000012 }, user)));
         Assert.Equal(goldBeforeFinish + 2000, server.Scalar($"SELECT gold FROM gameuser WHERE user_no={user}"));

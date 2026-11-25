@@ -275,6 +275,7 @@ internal sealed class GameSchema(DataSession session, string masterDataDirectory
                 id {Sql.IntegerColumn} PRIMARY KEY, generation {Sql.IntegerColumn} NOT NULL,
                 season_no {Sql.IntegerColumn} NOT NULL, ends_at {Sql.IntegerColumn} NOT NULL, closed {Sql.IntegerColumn} NOT NULL DEFAULT 0)
             """);
+        AddMissingIntegerColumns("pvp_control", [("featured_ally", 0)]);
         session.Execute($"""
             CREATE TABLE IF NOT EXISTS pvp_history(
                 generation {Sql.IntegerColumn}, user_no {Sql.IntegerColumn}, points {Sql.IntegerColumn} DEFAULT 0,
@@ -326,13 +327,14 @@ internal sealed class GameSchema(DataSession session, string masterDataDirectory
                 PRIMARY KEY(generation, user_no, grade))
             """);
 
-        // Arena season ranking rewards already mailed, per season generation (final rank and participant count kept for 404).
+        // Arena season ranking rewards already mailed, per season generation (final rank, participant count and paid Reward 1 kept for 404).
         session.Execute($"""
             CREATE TABLE IF NOT EXISTS pvp_rank_paid(
                 generation {Sql.IntegerColumn}, user_no {Sql.IntegerColumn}, grade {Sql.IntegerColumn},
                 ranking {Sql.IntegerColumn}, total {Sql.IntegerColumn},
                 PRIMARY KEY(generation, user_no))
             """);
+        AddMissingIntegerColumns("pvp_rank_paid", [("reward1_item", 0), ("reward1_value", 0)]);
 
         // Optional global test schedule. Absence keeps the calendar-based raid rotation.
         session.Execute($"""

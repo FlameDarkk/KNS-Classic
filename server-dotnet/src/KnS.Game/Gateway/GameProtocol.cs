@@ -52,6 +52,7 @@ public enum GameProtocol
     FellowEvolve = 309,
     FellowTalentReset = 319,
     FellowLevelUp = 310,
+    UseBuffItem = 311,
     FriendList = 62,
     FriendDetail = 64,
     FriendDeny = 110,

@@ -516,24 +516,74 @@ public sealed class AllowlistTests : IDisposable
         command.ExecuteNonQuery();
         JsonObject automatic = await AdminPathAsync("/admin/accounts?arena=1", null, HttpMethod.Get);
         Assert.Equal(9, automatic["arena"]!["season"]!.GetValue<long>());
-        // Season ranking rewards: season 7 (generation 1) had one fighter, ranked 1st -> ticket + 500 Gems, mailed once under
-        // "PvP Reward". Season 8 had no battles, so the automatic rollover pays nothing; the opponent never fought, so gets nothing.
+        // Season ranking rewards: season 7 (generation 1, Leon pair) had one fighter, ranked 1st -> 6★ Holy Paladin Leon (105017) + 500 Gems,
+        // mailed once under "PvP Reward". Season 8 had no battles, so the automatic rollover pays nothing; the opponent never fought, so gets nothing.
         command.CommandText = "SELECT COUNT(*) FROM reward_mail WHERE text_code=9800021 AND user_no=" + user;
         Assert.Equal(1L, Convert.ToInt64(command.ExecuteScalar(), System.Globalization.CultureInfo.InvariantCulture));
         command.CommandText = "SELECT item_id1 || ',' || value1 || ',' || item_id2 || ',' || value2 FROM reward_mail WHERE text_code=9800021 AND user_no=" + user;
-        Assert.Equal("1900012,1,1900009,500", command.ExecuteScalar());
+        Assert.Equal("105017,1,1900009,500", command.ExecuteScalar());
         command.CommandText = "SELECT COUNT(*) FROM reward_mail WHERE text_code=9800021 AND user_no=" + opponent;
         Assert.Equal(0L, Convert.ToInt64(command.ExecuteScalar(), System.Globalization.CultureInfo.InvariantCulture));
         JsonObject claimed = (await CallAsync(404, new { }, user))["reward_pvp_info"]!.AsObject();
         Assert.Equal(1, claimed["Grade"]!.GetValue<long>());
+        Assert.Equal(105017, claimed["Reward1_Item"]!.GetValue<long>());
         Assert.Equal(500, claimed["Reward2_Value"]!.GetValue<long>());
         Assert.Empty((await CallAsync(404, new { }, opponent))["reward_pvp_info"]!.AsObject());
+
+        // Studio featured ally override: pin Succubus Queen Lyrith (100512), verify 405 reflects it, reject invalid id,
+        // settle with 4 fighters (ranks 1-3 get 6★ 100512, rank 4 gets 5★ 100511), reset pin to auto on next season,
+        // and verify 404 keeps the settled ally while 115 delivers it into fellow + fellow_book.
+        JsonObject arenaMeta = await AdminPathAsync("/admin/accounts?arena=1", null, HttpMethod.Get);
+        Assert.Equal(7, arenaMeta["arena_allies"]!.AsArray().Count);
+        JsonObject pinned = await AdminPathAsync("/admin/accounts", new { action = "arena_ally", featured_ally = 100512 });
+        Assert.Equal(100512, pinned["arena"]!["featured_ally"]!.GetValue<long>());
+        Assert.Equal(100512, pinned["arena"]!["featured_ally_override"]!.GetValue<long>());
+        JsonArray pinnedRewards = (await CallAsync(405, new { }, user))["pvp_ranking_reward_info"]!.AsArray();
+        Assert.Equal(100512, pinnedRewards[0]!["Reward1_Item"]!.GetValue<long>());
+        Assert.Equal(100512, pinnedRewards[2]!["Reward1_Item"]!.GetValue<long>());
+        Assert.Equal(100511, pinnedRewards[3]!["Reward1_Item"]!.GetValue<long>());
+        Assert.Equal(100511, pinnedRewards[7]!["Reward1_Item"]!.GetValue<long>());
+        Assert.Equal(1900012, pinnedRewards[8]!["Reward1_Item"]!.GetValue<long>());
+
+        using var badAlly = new HttpRequestMessage(HttpMethod.Post, "/admin/accounts");
+        badAlly.Headers.Add("X-Admin-Key", "secret");
+        badAlly.Content = new StringContent("{\"action\":\"arena_ally\",\"featured_ally\":100001}", Encoding.UTF8, "application/json");
+        Assert.Equal(System.Net.HttpStatusCode.BadRequest, (await _client.SendAsync(badAlly)).StatusCode);
+
+        await AdminAsync("", new { email = "arena-r3@example.com" });
+        await AdminAsync("attach", new { email = "arena-r3@example.com", device_id = "arena-r3-device" });
+        await AdminAsync("", new { email = "arena-r4@example.com" });
+        await AdminAsync("attach", new { email = "arena-r4@example.com", device_id = "arena-r4-device" });
+        long r3 = (await CallAsync(51, new { hub_did = "arena-r3-device" }))["user_no"]!.GetValue<long>();
+        long r4 = (await CallAsync(51, new { hub_did = "arena-r4-device" }))["user_no"]!.GetValue<long>();
+        await CallAsync(60, new { }, r3);
+        await CallAsync(60, new { }, r4);
+        command.CommandText = $"INSERT OR REPLACE INTO pvp_stat(user_no,points) VALUES({user},400),({opponent},300),({r3},200),({r4},100)";
+        command.ExecuteNonQuery();
+
+        JsonObject afterPinned = await AdminPathAsync("/admin/accounts", new { action = "arena_next" });
+        Assert.Equal(10, afterPinned["arena"]!["season"]!.GetValue<long>());
+        Assert.Equal(0, afterPinned["arena"]!["featured_ally_override"]!.GetValue<long>());
+        // Season 10 auto-cycles to index (10 - 1) % 7 = 2 -> Lyrith (100512), and Season 9's payouts used pinned Lyrith too.
+        command.CommandText = $"SELECT item_id1 FROM reward_mail WHERE text_code=9800021 AND user_no={r3} ORDER BY rowid_alias DESC LIMIT 1";
+        Assert.Equal(100512L, Convert.ToInt64(command.ExecuteScalar(), System.Globalization.CultureInfo.InvariantCulture));
+        command.CommandText = $"SELECT item_id1 FROM reward_mail WHERE text_code=9800021 AND user_no={r4} ORDER BY rowid_alias DESC LIMIT 1";
+        Assert.Equal(100511L, Convert.ToInt64(command.ExecuteScalar(), System.Globalization.CultureInfo.InvariantCulture));
+        Assert.Equal(100511, (await CallAsync(404, new { }, r4))["reward_pvp_info"]!["Reward1_Item"]!.GetValue<long>());
+        command.CommandText = $"SELECT rowid_alias FROM reward_mail WHERE text_code=9800021 AND user_no={r4} ORDER BY rowid_alias DESC LIMIT 1";
+        long r4Mail = Convert.ToInt64(command.ExecuteScalar(), System.Globalization.CultureInfo.InvariantCulture);
+        JsonObject r4Claim = await CallAsync(115, new { mail_list = new[] { r4Mail } }, r4);
+        Assert.Equal(0, r4Claim["errno"]!.GetValue<long>());
+        Assert.Equal(100511, Assert.Single(r4Claim["fellow_info"]!.AsArray())!["fellow_id"]!.GetValue<long>());
+        command.CommandText = $"SELECT COUNT(*) FROM fellow_book WHERE user_no={r4} AND fellow_id=100511";
+        Assert.Equal(1L, Convert.ToInt64(command.ExecuteScalar(), System.Globalization.CultureInfo.InvariantCulture));
+
         using var invalid = new HttpRequestMessage(HttpMethod.Post, "/admin/accounts");
         invalid.Headers.Add("X-Admin-Key", "secret");
         invalid.Content = new StringContent("{\"action\":\"arena_number\",\"season\":0}", Encoding.UTF8, "application/json");
         using HttpResponseMessage bad = await _client.SendAsync(invalid);
         Assert.Equal(System.Net.HttpStatusCode.BadRequest, bad.StatusCode);
-        Assert.Equal(9, (await AdminPathAsync("/admin/accounts?arena=1", null, HttpMethod.Get))["arena"]!["season"]!.GetValue<long>());
+        Assert.Equal(10, (await AdminPathAsync("/admin/accounts?arena=1", null, HttpMethod.Get))["arena"]!["season"]!.GetValue<long>());
     }
 
     [Fact]

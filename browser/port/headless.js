@@ -88,6 +88,36 @@ const LAYOUT = {
     start: 0x7db7c, requestCall: 0x7dba0, epilogueLiteral: 0x7bf98, frame: 0x508c,
     gems: 0xaf0, // UpdateUserGoods @0x14a4d4..0x14a4e2: parsed cash enters fight+0xaf0
   },
+  gotReply: 0x1964,              // JanssonParser lit@0x15a618: [got+0x1964] = reply struct
+  arenaLimitedReward: {
+    // DrawRankingReward @0xdf120: draws fellow face + grade stars for item_id 100000..199999
+    drawFellowLookupCall: 0xdf1ce, drawFellowFaceCall: 0xdf1fe, drawGradeStarCall: 0xdf212,
+    drawEtcItemCall: 0xdf18c,
+    // Protocol 405 parser @0x15eca0..0x15ee22: pvp_ranking_reward_info -> reply+0xc450 (count) / +0xc45c (rows, stride 0x18)
+    parse405Start: 0x15eca0, parseRewardRowCall: 0x15ed80, parseExit: 0x15a3cc,
+    countLiteral: 0x15ef04, countOffset: 0xc450, rowsLiteral: 0x15ef08, rowsOffset: 0xc45c, rowStride: 0x18,
+  },
+  bookOfSecrets: {
+    // Protocol 311 parser @0x15f7f0..0x15f87c (+ type 2 branch @0x15f91e): buff_etc_info & use_item_no
+    parse311Start: 0x15f7f0, parseItemNoCall: 0x15f86e, parseExit: 0x15a3cc,
+    expBuffEndLiteral: 0x15fb30, expBuffEndOffset: 0x3fb8,
+    useItemNoLiteral: 0x15fb1c, useItemNoOffset: 0xc4b0,
+    // Protocol 311 NetworkEvent @0x1530fc..0x15313a: deletes use_item_no & sets fight+0x33d7 = 1
+    ne311Start: 0x1530fc, lookupItemCall: 0x153118, neExit: 0x15100a,
+    redrawFlagLiteral: 0x15327c, redrawFlagOffset: 0x33d7,
+    // DrawResult EXP display @0xe7b42..0xe7c6e: computes base + (base / 2) when fight+0x3fb8 > server_now
+    drawExpStart: 0xe7b42, sprintfCall: 0xe7c6a,
+    expEndLiteral: 0xe7be8, syncMsLiteral: 0xe7bec, syncMsOffset: 0x3238,
+    serverSecLiteral: 0xe7fc8, serverSecOffset: 0x3230,
+  },
+  tutorialChain: {
+    // Protocols 603 (@0x15d60e) & 602 (@0x15d65c): parse quest_infos[0] into reply+0xc420 (quest_id at +0xc428)
+    parse603Start: 0x15d60e, parse602Start: 0x15d65c, parseQuestCall603: 0x161872, parseQuestCall602: 0x161842,
+    questOffsetLiteral: 0x161aa8, questOffset: 0xc420, questIdOffset: 0xc428, parseExit: 0x15a3cc,
+    // Protocol 603 NetworkEvent @0x153456: reads reply+0xc428 -> StartTutorial(quest_id) @0x15a0ac or clear @0x159b16
+    ne603Dispatch: 0x153456, questIdLiteral: 0x15367c, startTutorialCall: 0x15a0ac,
+    activeQuestLiteral: 0x159dd0, activeQuestOffset: 0x338c, neExit: 0x15100a,
+  },
 };
 
 function readElf() {

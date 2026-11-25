@@ -135,8 +135,13 @@ public sealed class PlayerProfileService(
     public long AwardStageExperience(long userNumber, long stageId)
     {
         long stageExperience = masterData.GetStageExperience(stageId) ?? 0;
-        return AwardExperience(userNumber, stageExperience);
+        return AwardExperience(userNumber, ApplyExpBoost(userNumber, stageExperience));
     }
+
+    /// <summary>Applies the active Book of Secrets +50% EXP boost (buff type 2), if running.</summary>
+    public long ApplyExpBoost(long userNumber, long baseExperience) =>
+        Protocols.Items.ExpBoostRules.Apply(baseExperience,
+            buffs.IsActive(userNumber, Protocols.Items.ExpBoostRules.BuffType, clock.GetUtcNow().ToUnixTimeSeconds()));
 
     /// <summary>Awards hero experience and applies level-ups.</summary>
     public long AwardExperience(long userNumber, long amount)

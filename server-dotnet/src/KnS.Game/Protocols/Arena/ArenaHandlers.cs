@@ -51,7 +51,44 @@ public static class ArenaRules
     private static readonly long[] RankMax = [1, 2, 3, 10, 20, 30, 50, 100];
     private static readonly long[] PercentMax = [1, 5, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100];
 
-    public static ArenaRankingReward? RankingRewardFor(long rank, long total)
+    /// <summary>
+    /// The 7 native Altar -> Arena limited ally pairs (master_altar_recipes rows 15-21, in Altar order).
+    /// Native loading tips (5400014, 5400022) and DrawRankingReward@0xdf120 confirm Com2uS rotated Arena-exclusive
+    /// allies per season through Protocol 405; the rotation order and 6★ (1st-3rd) / 5★ (4th-100th) split are restoration choices.
+    /// </summary>
+    public static readonly IReadOnlyList<ArenaLimitedAllyPair> LimitedAllyPairs =
+    [
+        new(100498, 100499, "Battle Flower Caroline", "Battle Queen Caroline"),
+        new(100501, 100502, "Roaming Gladiator Shuske", "Lunar Gladiator Shuske"),
+        new(100511, 100512, "Succubus Lyrith", "Succubus Queen Lyrith"),
+        new(100519, 100520, "Assassin Hatsan", "Deadly Shadow Hatsan"),
+        new(100521, 100522, "Deadly Gaze Medusa", "Destructive Bride Medusa"),
+        new(105014, 105015, "Valkyri Brynhild", "Mystical Light Brynhild"),
+        new(105016, 105017, "Paladin Leon", "Holy Paladin Leon"),
+    ];
+
+    public static ArenaLimitedAllyPair? FindLimitedAlly(long allyId) =>
+        LimitedAllyPairs.FirstOrDefault(pair => pair.SixStarId == allyId || pair.FiveStarId == allyId);
+
+    public static ArenaLimitedAllyPair FeaturedAllyFor(long seasonNumber, long featuredAllyOverride = 0)
+    {
+        if (featuredAllyOverride > 0 && FindLimitedAlly(featuredAllyOverride) is { } pinned)
+        {
+            return pinned;
+        }
+        long index = (Math.Max(1, seasonNumber) - 1) % LimitedAllyPairs.Count;
+        return LimitedAllyPairs[(int)index];
+    }
+
+    public static IReadOnlyList<ArenaRankingReward> RankingRewardsFor(ArenaLimitedAllyPair pair) =>
+        RankingRewards.Select(row => row.Grade switch
+        {
+            >= 1 and <= 3 => row with { Reward1Item = pair.SixStarId, Reward1Value = 1 },
+            >= 4 and <= 8 => row with { Reward1Item = pair.FiveStarId, Reward1Value = 1 },
+            _ => row,
+        }).ToList();
+
+    public static ArenaRankingReward? RankingRewardFor(long rank, long total, ArenaLimitedAllyPair? pair = null)
     {
         if (rank < 1 || total < rank) return null;
         int index = Array.FindIndex(RankMax, max => rank <= max);
@@ -60,7 +97,8 @@ public static class ArenaRules
             long percent = (rank * 100 + total - 1) / total;
             index = RankMax.Length + Array.FindIndex(PercentMax, max => percent <= max);
         }
-        return RankingRewards.FirstOrDefault(row => row.Grade == index + 1);
+        IReadOnlyList<ArenaRankingReward> table = pair is null ? RankingRewards : RankingRewardsFor(pair);
+        return table.FirstOrDefault(row => row.Grade == index + 1);
     }
 
     // Native 1.4.0 season ranking rewards (tickets + gems).
@@ -236,20 +274,33 @@ public sealed class ArenaService(PvpRepository pvp, FriendService friends, Playe
     /// </summary>
     private void SettleRanking(PvpControlRecord season)
     {
+        ArenaLimitedAllyPair featured = FeaturedAlly(season);
         IReadOnlyList<PvpStatRecord> standings = pvp.Participants();
         for (int i = 0; i < standings.Count; i++)
         {
             long rank = i + 1, user = standings[i].UserNumber;
-            if (ArenaRules.RankingRewardFor(rank, standings.Count) is not { } reward
-                || !pvp.TryMarkRankingPaid(season.Generation, user, reward.Grade, rank, standings.Count)) continue;
+            if (ArenaRules.RankingRewardFor(rank, standings.Count, featured) is not { } reward
+                || !pvp.TryMarkRankingPaid(season.Generation, user, reward.Grade, rank, standings.Count, reward.Reward1Item, reward.Reward1Value)) continue;
             mail.Add(user, reward.Reward1Item, reward.Reward1Value, reward.Reward2Item, reward.Reward2Value,
                 message: $"Arena Season {season.SeasonNumber}: rank {rank}", textCode: MailTexts.PvpReward, regDate: Now);
         }
     }
 
-    /// <summary>The Reward-tab row last mailed to this player, for 404.</summary>
-    public ArenaRankingReward? LastRankingReward(long userNumber) =>
-        pvp.LastRankingPaid(userNumber) is { } paid ? ArenaRules.RankingRewards.FirstOrDefault(row => row.Grade == paid.Grade) : null;
+    public static ArenaLimitedAllyPair FeaturedAlly(PvpControlRecord season) =>
+        ArenaRules.FeaturedAllyFor(season.SeasonNumber, season.FeaturedAlly);
+
+    public static IReadOnlyList<ArenaRankingReward> RankingRewards(PvpControlRecord season) =>
+        ArenaRules.RankingRewardsFor(FeaturedAlly(season));
+
+    /// <summary>The Reward-tab row last mailed to this player, preserving the season's featured ally for 404.</summary>
+    public ArenaRankingReward? LastRankingReward(long userNumber)
+    {
+        if (pvp.LastRankingPaid(userNumber) is not { } paid) return null;
+        if (ArenaRules.RankingRewards.FirstOrDefault(row => row.Grade == paid.Grade) is not { } row) return null;
+        return paid.Reward1Item > 0
+            ? row with { Reward1Item = paid.Reward1Item, Reward1Value = paid.Reward1Value > 0 ? paid.Reward1Value : row.Reward1Value }
+            : row;
+    }
 
     public void FillSpirit(long userNumber)
     {
@@ -274,7 +325,7 @@ public sealed class ArenaService(PvpRepository pvp, FriendService friends, Playe
         long rounds = (now - state.EndsAt) / ArenaRules.WeekSeconds + 1;
         SettleRanking(state);
         pvp.Archive(state.Generation);
-        state = state with { Generation = checked(state.Generation + rounds), SeasonNumber = checked(state.SeasonNumber + rounds), EndsAt = checked(state.EndsAt + rounds * ArenaRules.WeekSeconds) };
+        state = state with { Generation = checked(state.Generation + rounds), SeasonNumber = checked(state.SeasonNumber + rounds), EndsAt = checked(state.EndsAt + rounds * ArenaRules.WeekSeconds), FeaturedAlly = 0 };
         pvp.SetControl(state);
         return state;
     }
@@ -291,6 +342,8 @@ public sealed class ArenaService(PvpRepository pvp, FriendService friends, Playe
 
     public void SetSeasonNumber(long number) => pvp.SetControl(CurrentSeason() with { SeasonNumber = number });
 
+    public void SetFeaturedAlly(long featuredAllyId) => pvp.SetControl(CurrentSeason() with { FeaturedAlly = featuredAllyId });
+
     public void EndSeason() => pvp.SetControl(CurrentSeason() with { EndsAt = Now, Closed = 1 });
 
     public void NextSeason()
@@ -298,7 +351,7 @@ public sealed class ArenaService(PvpRepository pvp, FriendService friends, Playe
         PvpControlRecord state = CurrentSeason();
         SettleRanking(state);
         pvp.Archive(state.Generation);
-        pvp.SetControl(state with { Generation = checked(state.Generation + 1), SeasonNumber = checked(state.SeasonNumber + 1), EndsAt = checked(Now + ArenaRules.WeekSeconds), Closed = 0 });
+        pvp.SetControl(state with { Generation = checked(state.Generation + 1), SeasonNumber = checked(state.SeasonNumber + 1), EndsAt = checked(Now + ArenaRules.WeekSeconds), Closed = 0, FeaturedAlly = 0 });
     }
 
     /// <summary>The arena rank for a profile card's pvp_rank; 0 ("No Records") before the first battle this season.</summary>
@@ -434,6 +487,8 @@ public sealed class ArenaService(PvpRepository pvp, FriendService friends, Playe
     }
 }
 
+public sealed record ArenaLimitedAllyPair(long FiveStarId, long SixStarId, string FiveStarName, string SixStarName);
+
 public sealed record ArenaRankingReward
 {
     [JsonPropertyName("Grade")] public long Grade { get; init; }
@@ -464,7 +519,7 @@ public sealed class ArenaSeasonHandler(ArenaService arena) : IProtocolHandler
             Week = season.SeasonNumber,
             CurrentRemain = remaining,
             NextRemain = remaining + ArenaRules.WeekSeconds,
-            RankingRewards = ArenaRules.RankingRewards,
+            RankingRewards = ArenaService.RankingRewards(season),
             MissionRewards = ArenaRules.MissionRewards,
         });
     }

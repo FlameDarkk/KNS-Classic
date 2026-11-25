@@ -125,6 +125,7 @@ public static class GameServiceCollectionExtensions
         AddHandler<FellowSellHandler>(services, GameProtocol.FellowSell);
         AddHandler<FellowEnhanceHandler>(services, GameProtocol.FellowEnhance);
         AddHandler<FellowLevelUpHandler>(services, GameProtocol.FellowLevelUp);
+        AddHandler<UseBuffItemHandler>(services, GameProtocol.UseBuffItem);
         AddHandler<FellowBookRewardHandler>(services, GameProtocol.FellowBookReward);
         AddHandler<FriendRequestHandler>(services, GameProtocol.FriendRequest);
         AddHandler<FriendRequestListHandler>(services, GameProtocol.FriendRequestList);

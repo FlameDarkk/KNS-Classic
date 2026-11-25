@@ -64,6 +64,26 @@ public sealed class RaidRankAndMailTests(ServerFixture server)
         Assert.Contains(login["fellow_info"]!.AsArray(), row => row!["fellow_id"]!.GetValue<long>() == id);
     }
 
+    [Theory]
+    [InlineData(1900018, 4)]
+    [InlineData(1900020, 6)]
+    public async Task Four_and_six_star_ticket_mails_grant_matching_drawable_allies_and_audit(long ticketItem, long expectedGrade)
+    {
+        long user = await PlayerAsync($"mail-star-ticket-{expectedGrade}");
+        using var scope = server.CreateScope();
+        MailRepository mail = scope.ServiceProvider.GetRequiredService<MailRepository>();
+        long number = mail.Add(user, ticketItem, 1);
+        JsonObject reply = await server.CallGatewayAsync(115, new { mail_list = new[] { number } }, user);
+        Assert.Equal(0, Error(reply));
+        JsonNode ally = Assert.Single(reply["fellow_info"]!.AsArray())!;
+        long id = ally["fellow_id"]!.GetValue<long>();
+        Assert.Equal(expectedGrade, server.Scalar($"SELECT grade FROM master_fellow WHERE fellow_id={id}"));
+        Assert.Equal(1, server.Scalar($"SELECT COUNT(*) FROM fellow WHERE user_no={user} AND fellow_id={id}"));
+        Assert.Equal(1, server.Scalar($"SELECT COUNT(*) FROM fellow_book WHERE user_no={user} AND fellow_id={id}"));
+        Assert.Equal(1, server.Scalar($"SELECT COUNT(*) FROM fellow_draw_audit WHERE user_no={user} AND source='mail_ticket' AND payment_item={ticketItem} AND payment_count=1 AND fellow_id={id} AND grade={expectedGrade}"));
+        Assert.Equal(0, server.Scalar($"SELECT COALESCE(SUM(count),0) FROM user_goods WHERE user_no={user} AND item_id={ticketItem}"));
+    }
+
     [Fact]
     public async Task Mail_validates_whole_batch_before_delivering_currency_equipment_and_multiple_allies()
     {

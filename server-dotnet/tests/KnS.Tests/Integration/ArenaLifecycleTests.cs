@@ -182,11 +182,14 @@ public class ArenaLifecycleTests(ServerFixture server)
         Assert.Equal(20, ranking.Count);
         Assert.Equal(28, mission.Count);
 
-        // Grade 1 ranking reward
+        // Grade 1 ranking reward (Season 1 features 6★ Battle Queen Caroline 100499; Grade 4 = 5★ 100498; Grade 9 = normal Ally Ticket 1900012).
         Assert.Equal(1, ranking[0]!["Grade"]!.GetValue<long>());
-        Assert.Equal(1900012, ranking[0]!["Reward1_Item"]!.GetValue<long>());
+        Assert.Equal(100499, ranking[0]!["Reward1_Item"]!.GetValue<long>());
+        Assert.Equal(1, ranking[0]!["Reward1_Value"]!.GetValue<long>());
         Assert.Equal(500, ranking[0]!["Reward2_Value"]!.GetValue<long>());
         Assert.Equal(9993501, ranking[0]!["Text_Index"]!.GetValue<long>());
+        Assert.Equal(100498, ranking[3]!["Reward1_Item"]!.GetValue<long>());
+        Assert.Equal(1900012, ranking[8]!["Reward1_Item"]!.GetValue<long>());
 
         // Grade 28 mission reward
         Assert.Equal(28, mission[27]!["Grade"]!.GetValue<long>());

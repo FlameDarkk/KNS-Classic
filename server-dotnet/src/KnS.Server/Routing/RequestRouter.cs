@@ -84,6 +84,21 @@ public sealed class RequestRouter(
             return;
         }
 
+        if (OnlineCountEndpoint.Matches(target))
+        {
+            long now = context.RequestServices.GetRequiredService<TimeProvider>().GetUtcNow().ToUnixTimeSeconds();
+            // The public poll is also the browser's heartbeat. Only a valid game session may
+            // refresh its own presence; anonymous spectators must not keep anyone online.
+            if (HttpMethods.IsPost(context.Request.Method)
+                && long.TryParse(context.Request.Headers["USERNO"].FirstOrDefault(), out long userNumber)
+                && context.RequestServices.GetRequiredService<KnS.Game.Players.SessionService>()
+                    .IsValid(userNumber, context.Request.Headers["SESSIONKEY"].FirstOrDefault()))
+                context.RequestServices.GetRequiredService<KnS.Data.Repositories.PlayerRepository>().TouchSeen(userNumber, now);
+            context.Response.Headers.CacheControl = "no-store";
+            await WriteJsonAsync(context, OnlineCountEndpoint.Read(context.RequestServices.GetRequiredService<DataSession>(), now));
+            return;
+        }
+
         if (AccountEditorEndpoint.Matches(target))
         {
             await accountEditor.ServeAsync(context);

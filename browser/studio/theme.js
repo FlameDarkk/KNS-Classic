@@ -54,12 +54,12 @@ document.addEventListener('DOMContentLoaded', () => {
   };
   let colors = {...defaults};
   try {
-    const saved = JSON.parse(localStorage.getItem('kns-studio-design-colors-v1'));
+    const saved = JSON.parse(localStorage.getItem('knsclassic-studio-design-colors-v1'));
     for (const key in defaults) if (/^#[0-9a-f]{6}$/i.test(saved?.[key])) colors[key] = saved[key];
   } catch {}
   function apply() {
     for (const [key,value] of Object.entries(colors)) document.documentElement.style.setProperty('--draft-'+key,value);
-    try { localStorage.setItem('kns-studio-design-colors-v1',JSON.stringify(colors)); } catch {}
+    try { localStorage.setItem('knsclassic-studio-design-colors-v1',JSON.stringify(colors)); } catch {}
     for (const picker of controls.querySelectorAll('input[data-color]')) picker.value = colors[picker.dataset.color];
   }
   for (const [key,label] of Object.entries({page:'Page background',panel:'Panel background',card:'Card background',input:'Field background',accent:'Active controls',border:'Borders',text:'Text'})) {

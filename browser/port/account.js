@@ -6,11 +6,11 @@
 // and so its player. The password is never stored.
 (function () {
 const SERVER = (window.KNS_SERVER || 'http://127.0.0.1:8081').replace(/\/$/, '');
-const PROP = 'kns:prop:';
-const INSTANCE_KEY = 'kns:instance';
+const PROP = 'knsclassic:prop:';
+const INSTANCE_KEY = 'knsclassic:instance';
 const get = k => { try { return localStorage.getItem(PROP + k); } catch (e) { return null; } };
-// Outside the kns: prefix on purpose: forgetLocal() clears kns:* and must not sign the player out.
-const SESSION_KEY = 'kns_session';
+// Outside the knsclassic: prefix on purpose: forgetLocal() clears knsclassic:* and must not sign the player out.
+const SESSION_KEY = 'knsclassic_session';
 
 const storedSession = () => {
   try {
@@ -25,13 +25,13 @@ const saveSession = j => {
 
 const dropSession = () => { try { localStorage.removeItem(SESSION_KEY); } catch (e) { /* nothing was stored */ } };
 
-const SAVE_OWNER = 'kns:save_owner';
-const SAVE_PREFIX = 'kns:file:';
+const SAVE_OWNER = 'knsclassic:save_owner';
+const SAVE_PREFIX = 'knsclassic:file:';
 const forgetLocal = (keepAccount = false, wipeSave = false) => {
   try {
     const keep = new Set([INSTANCE_KEY, EPOCH_KEY, ...(keepAccount ? ['account_id', 'web_did', 'account_guest'].map(k => PROP + k) : [])]);
     const isSave = k => k === SAVE_OWNER || k.startsWith(SAVE_PREFIX);
-    Object.keys(localStorage).filter(k => k.startsWith('kns:') && !keep.has(k) && (wipeSave || !isSave(k)))
+    Object.keys(localStorage).filter(k => k.startsWith('knsclassic:') && !keep.has(k) && (wipeSave || !isSave(k)))
       .forEach(k => localStorage.removeItem(k));
   } catch (e) { /* nothing was stored */ }
 };
@@ -256,7 +256,7 @@ document.body.appendChild(button);
 
 // After a server-wide progress reset (tools/reset_progress.py), drop this browser's native game save (kns:file:*: tutorial
 // state, local flags) once, so it starts as fresh as the server data. An unreachable server changes nothing.
-const EPOCH_KEY = 'kns:progress_epoch';
+const EPOCH_KEY = 'knsclassic:progress_epoch';
 const syncProgressEpoch = async () => {
   let epoch;
   try {
@@ -267,7 +267,7 @@ const syncProgressEpoch = async () => {
   if (!Number.isFinite(epoch) || epoch <= 0) return;
   try {
     if (localStorage.getItem(EPOCH_KEY) === String(epoch)) return;
-    Object.keys(localStorage).filter(k => k.startsWith('kns:file:')).forEach(k => localStorage.removeItem(k));
+    Object.keys(localStorage).filter(k => k.startsWith('knsclassic:file:')).forEach(k => localStorage.removeItem(k));
     localStorage.setItem(EPOCH_KEY, String(epoch));
   } catch (e) { /* storage blocked: nothing saved locally either */ }
 };

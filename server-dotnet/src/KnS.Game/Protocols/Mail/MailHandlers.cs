@@ -65,7 +65,12 @@ public sealed class MailClaimHandler(
     PlayerProfileService profiles, PlayerRepository players, GoodsRepository goods,
     FellowService fellows, ItemRepository items, InventoryService inventory, FellowDrawAuditRepository audit, TimeProvider clock) : IProtocolHandler
 {
-    private const long FiveStarAllyTicket = 1900019;
+    private static readonly Dictionary<long, long> GradeAllyTickets = new()
+    {
+        [1900018] = 4,
+        [1900019] = 5,
+        [1900020] = 6,
+    };
 
     public ProtocolResult Handle(GatewayRequest request)
     {
@@ -100,32 +105,33 @@ public sealed class MailClaimHandler(
 
         HashSet<long> allyNumbers = [];
         HashSet<long> itemNumbers = [];
-        // The native mailbox opens the ally draw result immediately for this reward.
+        // The native mailbox opens the ally draw result immediately for star-grade ally tickets (1900018/1900019/1900020).
         // Resolve every draw before deleting any mail, so an empty pool cannot consume it.
-        var ticketDraws = new List<long>();
-        foreach ((long item, long count) in rewards.Where(reward => reward.Item == FiveStarAllyTicket))
+        var ticketDraws = new List<(long TicketItem, long FellowId)>();
+        foreach ((long item, long count) in rewards)
         {
-            if (count > 1000) return ProtocolResult.Refused("too many ally tickets");
+            if (!GradeAllyTickets.TryGetValue(item, out long grade)) continue;
+            if (count > 1000 || ticketDraws.Count + count > 1000) return ProtocolResult.Refused("too many ally tickets");
             for (long i = 0; i < count; i++)
             {
-                long? drawn = fellows.PickDrawableOfGrade(5);
-                if (drawn is null) return ProtocolResult.Refused("no five-star allies available");
-                ticketDraws.Add(drawn.Value);
+                long? drawn = fellows.PickDrawableOfGrade(grade);
+                if (drawn is null) return ProtocolResult.Refused($"no {grade}-star allies available");
+                ticketDraws.Add((item, drawn.Value));
             }
         }
         foreach (MailRecord row in selected) mail.Delete(user, row.MailNumber);
         string username = audit.Username(user);
         string batchId = Guid.NewGuid().ToString("N");
         long timestamp = clock.GetUtcNow().ToUnixTimeSeconds();
-        foreach (long fellowId in ticketDraws)
+        foreach ((long ticketItem, long fellowId) in ticketDraws)
         {
             long fellowNumber = fellows.Grant(user, fellowId);
-            audit.Record(user, username, player.Nickname, batchId, timestamp, "mail_ticket", 0, FiveStarAllyTicket, 1, fellowNumber, fellowId);
+            audit.Record(user, username, player.Nickname, batchId, timestamp, "mail_ticket", 0, ticketItem, 1, fellowNumber, fellowId);
             allyNumbers.Add(fellowNumber);
         }
         foreach ((long item, long count) in rewards)
         {
-            if (item == FiveStarAllyTicket) continue;
+            if (GradeAllyTickets.ContainsKey(item)) continue;
             if (item == CurrencyItems.Gold) profiles.AddCurrency(user, gold: count);
             else if (item == CurrencyItems.Gems) profiles.AddCurrency(user, gems: count);
             else if (item == CurrencyItems.Stamina)

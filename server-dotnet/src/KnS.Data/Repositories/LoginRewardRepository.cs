@@ -17,7 +17,7 @@ public sealed record LoginRewardState
 
     public bool GiftActive { get; init; }
 
-    /// <summary>The one-time new-account gift has started.</summary>
+    /// <summary>Whether a returning-player 7-day gift has ever started (retained for schema compatibility).</summary>
     public bool GiftUsed { get; init; }
 }
 

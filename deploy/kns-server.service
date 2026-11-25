@@ -1,15 +1,15 @@
 [Unit]
-Description=Knights N Squires server (game, Studio, API, World relay)
+Description=Knights N Squires Classic server (game, Studio, API, chat)
 After=network-online.target
 Wants=network-online.target
 
 [Service]
 Type=simple
-User=kns
-Group=kns
-EnvironmentFile=/etc/kns/kns.env
-WorkingDirectory=/var/lib/kns
-ExecStart=/opt/kns/server/KnS.Server
+User=kns-classic
+Group=kns-classic
+EnvironmentFile=/etc/kns-classic/kns.env
+WorkingDirectory=/var/lib/kns-classic
+ExecStart=/opt/kns-classic/server/KnS.Server
 Restart=always
 RestartSec=3
 # Only the database folder is writable.
@@ -17,7 +17,7 @@ NoNewPrivileges=true
 ProtectSystem=strict
 ProtectHome=true
 PrivateTmp=true
-ReadWritePaths=/var/lib/kns
+ReadWritePaths=/var/lib/kns-classic
 
 [Install]
 WantedBy=multi-user.target

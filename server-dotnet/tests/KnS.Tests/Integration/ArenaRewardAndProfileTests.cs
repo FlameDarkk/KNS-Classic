@@ -34,6 +34,32 @@ public class ArenaRewardAndProfileTests(ServerFixture server)
     public void Ranking_reward_needs_a_valid_rank() =>
         Assert.Null(KnS.Game.Protocols.Arena.ArenaRules.RankingRewardFor(5, 4));
 
+    private static readonly long[] ExpectedSixStarCycle = [100499, 100502, 100512, 100520, 100522, 105015, 105017, 100499];
+    private static readonly long[] ExpectedFiveStarCycle = [100498, 100501, 100511, 100519, 100521, 105014, 105016, 100498];
+
+    [Fact]
+    public void Arena_limited_allies_cycle_across_the_seven_altar_pairs_and_assign_six_and_five_star_tiers()
+    {
+        for (int season = 1; season <= 8; season++)
+        {
+            var pair = KnS.Game.Protocols.Arena.ArenaRules.FeaturedAllyFor(season);
+            Assert.Equal(ExpectedSixStarCycle[season - 1], pair.SixStarId);
+            Assert.Equal(ExpectedFiveStarCycle[season - 1], pair.FiveStarId);
+            var table = KnS.Game.Protocols.Arena.ArenaRules.RankingRewardsFor(pair);
+            Assert.Equal(20, table.Count);
+            Assert.All(table.Where(r => r.Grade is >= 1 and <= 3), r => Assert.Equal(pair.SixStarId, r.Reward1Item));
+            Assert.All(table.Where(r => r.Grade is >= 4 and <= 8), r => Assert.Equal(pair.FiveStarId, r.Reward1Item));
+            Assert.All(table.Where(r => r.Grade >= 9), r => Assert.Equal(1900012, r.Reward1Item));
+            Assert.Equal(500, table[0].Reward2Value);
+            Assert.Equal(90, table[7].Reward2Value);
+            Assert.Equal(70, table[8].Reward2Value);
+        }
+
+        // Pin overrides auto-rotation; unknown override falls back to auto.
+        Assert.Equal(100512, KnS.Game.Protocols.Arena.ArenaRules.FeaturedAllyFor(1, 100512).SixStarId);
+        Assert.Equal(100499, KnS.Game.Protocols.Arena.ArenaRules.FeaturedAllyFor(1, 999999).SixStarId);
+    }
+
     [Fact]
     public async Task Give_up_is_a_zero_point_loss_and_only_wins_mark_the_opponent()
     {

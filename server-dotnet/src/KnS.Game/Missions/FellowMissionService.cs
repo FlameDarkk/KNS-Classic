@@ -18,6 +18,7 @@ public sealed class FellowMissionService(
     FellowRepository fellows,
     FellowService fellowService,
     PlayerRepository players,
+    BuffRepository buffs,
     RewardGrantService rewardGrants,
     KnS.Game.Stages.StoryService stories,
     IRandomSource random,
@@ -474,7 +475,9 @@ public sealed class FellowMissionService(
 
         if (missions.FindRule(mission.MissionId) is { Experience: > 0 } rule)
         {
-            fellowService.AwardExperience(userNumber, Numbers(mission.Fellows), rule.Experience);
+            long experience = Protocols.Items.ExpBoostRules.Apply(rule.Experience,
+                buffs.IsActive(userNumber, Protocols.Items.ExpBoostRules.BuffType, Now));
+            fellowService.AwardExperience(userNumber, Numbers(mission.Fellows), experience);
         }
 
         var granted = new GrantedRewards();

@@ -39,13 +39,13 @@ const INDEX = window.KNS_INDEX;   // asset name -> [size, script number]
 const assets = new Map();
 const loading = new Map();
 const files = new Map();
-const SAVE_PREFIX = 'kns:file:';
+const SAVE_PREFIX = 'knsclassic:file:';
 const safeGet = k => { try { return localStorage.getItem(k); } catch (e) { return null; } };
 const safeSet = (k, v) => { try { localStorage.setItem(k, v); return true; } catch (e) { /* page still works, nothing persists */ return false; } };
 const safeDel = k => { try { localStorage.removeItem(k); } catch (e) { /* no storage */ } };
 
 // ---------- settings: saved per browser. Every default is the behaviour without the panel. ----------
-const SETTINGS_KEY = 'kns-settings-v1';
+const SETTINGS_KEY = 'knsclassic-settings-v1';
 const RES_SCALE = { high: 1, medium: 0.75, low: 0.6, verylow: 0.45 };
 const settings = (() => {
   const mem = typeof navigator !== 'undefined' && navigator.deviceMemory;
@@ -53,14 +53,14 @@ const settings = (() => {
   let saved = null;
   try { saved = JSON.parse(safeGet(SETTINGS_KEY)); } catch (e) { /* defaults */ }
   // The earlier Low-spec checkbox was 60% resolution.
-  if (!saved && safeGet('kns-lowspec-v1') === '1') saved = { resolution: 'low' };
+  if (!saved && safeGet('knsclassic-lowspec-v1') === '1') saved = { resolution: 'low' };
   if (saved && typeof saved === 'object') {
     if (Object.hasOwn(RES_SCALE, saved.resolution)) s.resolution = saved.resolution;
     for (const k of ['memorySaver', 'showFps']) if (typeof saved[k] === 'boolean') s[k] = saved[k];
   }
   return s;
 })();
-const saveSettings = () => { safeSet(SETTINGS_KEY, JSON.stringify(settings)); safeDel('kns-lowspec-v1'); };
+const saveSettings = () => { safeSet(SETTINGS_KEY, JSON.stringify(settings)); safeDel('knsclassic-lowspec-v1'); };
 
 // ---------- asset memory: decoded files stay in RAM up to a cap; older ones are read again from Cache Storage ----------
 let assetBytes = 0;
@@ -194,7 +194,7 @@ function renderDownloads() {
 }
 // ---------- persistent asset cache: a hard reload (Ctrl+F5) bypasses the HTTP cache, not Cache Storage ----------
 // Entries hold validated decoded bytes keyed by the hashed asset URL; a new data folder drops the old entries.
-const ASSET_CACHE = 'kns-assets-v1';
+const ASSET_CACHE = 'knsclassic-assets-v1';
 const assetCache = (() => {
   if (!CAN_FETCH || typeof caches === 'undefined' || !window.isSecureContext) return Promise.resolve(null);
   return caches.open(ASSET_CACHE).then(cache => {
@@ -722,7 +722,14 @@ for (const type of ['pointerdown', 'pointerup', 'touchend', 'keydown', 'click'])
 const fatal = e => {
   log('CRASH ' + (e && e.stack || e));
   dlEl.hidden = true;
-  statusEl.textContent = 'Crashed: ' + (e && e.message || e);
+  let where = '';
+  try {
+    if (game && game.rt && game.rt.describeAddr) {
+      const r = game.rt.cpu.r;
+      where = ` [pc=${game.rt.describeAddr(r[15])} lr=${game.rt.describeAddr(r[14])}]`;
+    }
+  } catch (e2) { /* best effort */ }
+  statusEl.textContent = 'Crashed: ' + (e && e.message || e) + where;
   statusEl.hidden = false;
   try { game && game.dumpState(); } catch (e2) { /* the crash message above is what matters */ }
   running = false;
@@ -1067,7 +1074,7 @@ const EV = { DOWN: 1, MOVE: 2, UP: 3 };
 canvas.tabIndex = 0;
 const touches = new Map();
 let controlsPanelOpen = false;
-const controlsStorageKey = 'kns-controls-v1';
+const controlsStorageKey = 'knsclassic-controls-v1';
 let savedBindings;
 let sendKeyboardTouch;
 try { savedBindings = JSON.parse(localStorage.getItem(controlsStorageKey)); } catch (e) { /* use defaults */ }
@@ -1132,6 +1139,116 @@ const renderFullButton = () => {
   // Gone once everything is downloaded, and never drawn over the game in fullscreen.
   fullOpen.hidden = done || isFullscreen();
 };
+// Online players under the side buttons: /api/online counts activity in the last 5 minutes.
+// Its authenticated POST is also a heartbeat, so an open lobby or long battle stays online without game requests.
+// Hidden in fullscreen, while the server is unreachable, and whenever the text would reach the game canvas.
+const onlineEl = document.createElement('div');
+onlineEl.id = 'online-count';
+onlineEl.hidden = true;
+document.body.appendChild(onlineEl);
+let onlineCount = null;
+let onlineNames = [];
+// Online names popup: hovering the count for a moment shows it until the pointer leaves the count; a click pins it open
+// until its close button, a second click on the count, Escape or a click elsewhere.
+const onlinePopup = document.createElement('div');
+onlinePopup.id = 'online-popup';
+onlinePopup.hidden = true;
+onlinePopup.setAttribute('role', 'dialog');
+onlinePopup.setAttribute('aria-label', 'Players online');
+const onlineTitle = document.createElement('span');
+const onlineClose = document.createElement('button');
+onlineClose.type = 'button';
+onlineClose.textContent = '×';
+onlineClose.setAttribute('aria-label', 'Close');
+const onlineHeader = document.createElement('header');
+onlineHeader.append(onlineTitle, onlineClose);
+const onlineList = document.createElement('ul');
+onlinePopup.append(onlineHeader, onlineList);
+document.body.appendChild(onlinePopup);
+let onlinePopupMode = null;   // null (closed), 'hover' or 'pinned'
+let onlineHoverTimer = 0;
+const fillOnlinePopup = () => {
+  onlineTitle.textContent = 'Players online (' + (onlineCount || 0) + ')';
+  const rows = document.createDocumentFragment();
+  for (const name of onlineNames.length ? onlineNames : [null]) {
+    const li = document.createElement('li');
+    if (name === null) { li.className = 'online-empty'; li.textContent = 'No names yet'; } else { li.textContent = name; li.title = name; }
+    rows.appendChild(li);
+  }
+  onlineList.replaceChildren(rows);
+};
+const placeOnlinePopup = () => {
+  const r = onlineEl.getBoundingClientRect();
+  onlinePopup.style.left = Math.max(4, r.left) + 'px';
+  onlinePopup.style.top = (r.bottom + 6) + 'px';
+};
+const showOnlinePopup = mode => {
+  if (onlineEl.hidden) return;
+  onlinePopupMode = mode;
+  fillOnlinePopup();
+  onlinePopup.hidden = false;
+  placeOnlinePopup();
+};
+const hideOnlinePopup = () => { onlinePopupMode = null; onlinePopup.hidden = true; };
+onlineEl.addEventListener('mouseenter', () => {
+  clearTimeout(onlineHoverTimer);
+  if (onlinePopupMode === null) onlineHoverTimer = setTimeout(() => showOnlinePopup('hover'), 1200);
+});
+onlineEl.addEventListener('mouseleave', () => {
+  clearTimeout(onlineHoverTimer);
+  if (onlinePopupMode === 'hover') hideOnlinePopup();
+});
+onlineEl.addEventListener('click', e => {
+  e.stopPropagation();
+  clearTimeout(onlineHoverTimer);
+  if (onlinePopupMode === 'pinned') hideOnlinePopup(); else showOnlinePopup('pinned');
+});
+onlineClose.addEventListener('click', e => { e.stopPropagation(); hideOnlinePopup(); });
+onlinePopup.addEventListener('pointerdown', e => e.stopPropagation());
+document.addEventListener('pointerdown', e => {
+  if (onlinePopupMode === 'pinned' && e.target !== onlineEl && !onlinePopup.contains(e.target)) hideOnlinePopup();
+}, true);
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && onlinePopupMode) hideOnlinePopup(); });
+const renderOnline = () => {
+  if (onlineCount === null || isFullscreen()) { onlineEl.hidden = true; hideOnlinePopup(); return; }
+  onlineEl.textContent = onlineCount + (onlineCount === 1 ? ' player online' : ' players online');
+  onlineEl.hidden = false;
+  onlineEl.hidden = onlineEl.getBoundingClientRect().right > canvas.getBoundingClientRect().left - 4;
+  if (onlineEl.hidden) hideOnlinePopup();
+  else if (onlinePopupMode) { fillOnlinePopup(); placeOnlinePopup(); }
+};
+let onlinePolling = false, onlinePollAgain = false;
+const pollOnline = async () => {
+  if (onlinePolling) { onlinePollAgain = true; return; }
+  onlinePolling = true;
+  try {
+    const server = (window.KNS_SERVER || 'http://127.0.0.1:8081').replace(/\/$/, '');
+    const session = window.KnsSession, auth = session && session.gateway && session.gateway.headers;
+    const headers = { 'Content-Type': 'text/plain' };
+    if (session && session.userNo > 0 && auth && auth.USERNO === String(session.userNo) && auth.SESSIONKEY) {
+      headers.USERNO = auth.USERNO; headers.SESSIONKEY = auth.SESSIONKEY;
+    }
+    const r = await fetch(server + '/api/online', { method: 'POST', headers, body: '{}', cache: 'no-store',
+      signal: typeof AbortSignal !== 'undefined' && AbortSignal.timeout ? AbortSignal.timeout(8000) : undefined });
+    if (!r.ok) throw new Error('Online poll failed');
+    const reply = await r.json();
+    const n = Number(reply.online);
+    onlineCount = Number.isFinite(n) && n >= 0 ? Math.floor(n) : null;
+    onlineNames = Array.isArray(reply.players) ? reply.players.filter(name => typeof name === 'string' && name) : [];
+  } catch (e) { onlineCount = null; onlineNames = []; }
+  onlinePolling = false;
+  renderOnline();
+  if (onlinePollAgain) { onlinePollAgain = false; pollOnline(); }
+};
+pollOnline();
+setInterval(pollOnline, 30000);
+window.addEventListener('kns-session-changed', pollOnline);
+window.addEventListener('focus', pollOnline);
+window.addEventListener('pageshow', pollOnline);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) pollOnline(); });
+window.addEventListener('resize', renderOnline);
+document.addEventListener('fullscreenchange', renderOnline);
+document.addEventListener('webkitfullscreenchange', renderOnline);
 // Event dungeon calendar from the server (/api/events, edited in Studio), written over the client's bundled event
 // dates by native_hooks.js. Polled each minute; an unreachable server keeps the last calendar.
 const pollEvents = async () => {
@@ -1436,7 +1553,7 @@ const standDown = () => {
   statusEl.hidden = false;
 };
 try {
-  const bc = new BroadcastChannel('kns-instance');
+  const bc = new BroadcastChannel('knsclassic-instance');
   bc.onmessage = e => { if (e.data !== INSTANCE) standDown(); };
   bc.postMessage(INSTANCE);
 } catch (e) { /* the storage event below still covers it */ }
@@ -1444,7 +1561,7 @@ try {
 // player, a reload re-runs the login and picks up the new values without the user pressing anything.
 // Only the live copy reloads; a stood-down tab must stay down.
 try {
-  const sync = new BroadcastChannel('kns-studio-sync');
+  const sync = new BroadcastChannel('knsclassic-studio-sync');
   sync.onmessage = e => {
     const m = e.data || {};
     const mine = window.KnsSession && window.KnsSession.userNo;
@@ -1452,8 +1569,8 @@ try {
     if (running && mine > 0 && (m.user_no === mine || m.user_no === -1)) location.reload();
   };
 } catch (e) { /* cross-tab sync is best effort */ }
-addEventListener('storage', e => { if (e.key === 'kns:instance' && e.newValue && e.newValue !== INSTANCE) standDown(); });
-safeSet('kns:instance', INSTANCE);
+addEventListener('storage', e => { if (e.key === 'knsclassic:instance' && e.newValue && e.newValue !== INSTANCE) standDown(); });
+safeSet('knsclassic:instance', INSTANCE);
 
 preload(PRELOAD.startup);
 const shown = () => { try { start(); } catch (e) { fatal(e); } };

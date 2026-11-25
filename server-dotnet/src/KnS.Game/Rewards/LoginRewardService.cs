@@ -5,13 +5,16 @@ namespace KnS.Game.Rewards;
 /// <summary>What protocol 67 shows: reward_type 1 = 7-day gift, 2 = monthly calendar, 0 = nothing new; day = the row shown.</summary>
 public sealed record LoginRewardResult(long RewardType, long Day);
 
+/// <summary>Outcome of finishing a tutorial quest (602/603): whether a reward was granted and the next quest_id to chain into (0 = none).</summary>
+public sealed record TutorialFinishResult(bool Rewarded, long NextQuest);
+
 /// <summary>
 /// The login rewards of protocol 67, paid into the Message Box (the native reply carries no items).
 /// Native data: master_login_reward from dt_reward_pkg tables 4 (7-day gift) and 2 (28-day calendar).
 /// Restoration choices (no native rule recovered): a day starts at 00:00 UTC; both schedules count login days,
 /// so a missed day pauses rather than restarts; the calendar restarts on the 1st of each month and stops after 28;
-/// every account gets the 7-day gift once from its first login, afterwards only after <see cref="ReturningAfterDays"/>
-/// days without a login; while the gift runs both schedules pay and the popup shows the gift.
+/// the 7-day comeback gift triggers only when an existing account returns after <see cref="ReturningAfterDays"/>
+/// days without a login (never on a new account's first login); while the gift runs both schedules pay and the popup shows the gift.
 /// </summary>
 public sealed class LoginRewardService(LoginRewardRepository rewards, MailRepository mail, PlayerRepository players, TimeProvider clock)
 {
@@ -44,7 +47,7 @@ public sealed class LoginRewardService(LoginRewardRepository rewards, MailReposi
             return new LoginRewardResult(0, 0);
         }
 
-        bool startGift = !state.GiftUsed || (!state.GiftActive && state.LastDay > 0 && today - state.LastDay >= ReturningAfterDays);
+        bool startGift = !state.GiftActive && state.LastDay > 0 && today - state.LastDay >= ReturningAfterDays;
         long giftDay = startGift ? 0 : state.GiftDay;
         bool giftActive = startGift || state.GiftActive;
         long calendarDays = state.CalendarMonth == month ? state.CalendarDays : 0;
@@ -69,7 +72,7 @@ public sealed class LoginRewardService(LoginRewardRepository rewards, MailReposi
         rewards.Save(userNumber, new LoginRewardState
         {
             LastDay = today, CalendarMonth = month, CalendarDays = calendarDays,
-            GiftDay = giftDay, GiftActive = giftActive, GiftUsed = true,
+            GiftDay = giftDay, GiftActive = giftActive, GiftUsed = state.GiftUsed || startGift,
         });
         return shown;
     }
@@ -93,9 +96,10 @@ public sealed class LoginRewardService(LoginRewardRepository rewards, MailReposi
     /// <summary>
     /// 602/603 report the tutorial just finished (quest_id = gameInfo+0x338c). Moves the account forward through
     /// <see cref="TutorialChain"/> and pays the native dt_quest_140 reward for that quest once per account
-    /// (5000002 = 30 Gems, 5000005 = 1,000 Gold, 5000012 = 1,000 Gold). Returns true when a reward was granted.
+    /// (5000002 = 30 Gems, 5000005 = 1,000 Gold, 5000012 = 1,000 Gold). Returns the next quest_id in the chain
+    /// (for quest_infos in the 602/603 reply) only when the request actually advanced the chain.
     /// </summary>
-    public bool FinishTutorialQuest(long userNumber, long questId)
+    public TutorialFinishResult FinishTutorialQuest(long userNumber, long questId)
     {
         int done = Array.IndexOf(TutorialChain, questId);
         if (done >= 0)
@@ -104,16 +108,17 @@ public sealed class LoginRewardService(LoginRewardRepository rewards, MailReposi
             int at = Array.IndexOf(TutorialChain, current);
             if (current == 0 || done < at)
             {
-                return false;
+                return new TutorialFinishResult(false, 0);
             }
 
             long next = done + 1 < TutorialChain.Length ? TutorialChain[done + 1] : 0;
             rewards.SetTutorialQuest(userNumber, next);
-            return GrantTutorialQuestReward(userNumber, questId);
+            return new TutorialFinishResult(GrantTutorialQuestReward(userNumber, questId), next);
         }
 
         // Feature unlock tutorials (e.g. 5000012 Mission tutorial = 1,000 Gold) run outside the 5000001-5000005 chain.
-        return TutorialRewards.ContainsKey(questId) && GrantTutorialQuestReward(userNumber, questId);
+        bool rewarded = TutorialRewards.ContainsKey(questId) && GrantTutorialQuestReward(userNumber, questId);
+        return new TutorialFinishResult(rewarded, 0);
     }
 
     private bool GrantTutorialQuestReward(long userNumber, long questId)

@@ -133,7 +133,7 @@ public sealed class StoryService(
             return null;
         }
 
-        profiles.AwardExperience(userNumber, rule.Experience);
+        profiles.AwardExperience(userNumber, profiles.ApplyExpBoost(userNumber, rule.Experience));
         var granted = new GrantedRewards();
         foreach ((long item, long count) in rule.Rewards)
         {

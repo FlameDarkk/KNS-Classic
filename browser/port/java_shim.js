@@ -171,16 +171,16 @@ function installJava(rt, java, screen, ctx) {
   const store = {
     get(k) {
       if (storageOverrides.has(k)) return storageOverrides.get(k);
-      try { return localStorage.getItem('kns:prop:' + k); } catch (e) { return mem.has(k) ? mem.get(k) : null; }
+      try { return localStorage.getItem('knsclassic:prop:' + k); } catch (e) { return mem.has(k) ? mem.get(k) : null; }
     },
     set(k, v) {
       mem.set(k, v);
-      try { localStorage.setItem('kns:prop:' + k, v); storageOverrides.delete(k); }
+      try { localStorage.setItem('knsclassic:prop:' + k, v); storageOverrides.delete(k); }
       catch (e) { storageOverrides.set(k, v); }
     },
     del(k) {
       mem.delete(k);
-      try { localStorage.removeItem('kns:prop:' + k); storageOverrides.delete(k); }
+      try { localStorage.removeItem('knsclassic:prop:' + k); storageOverrides.delete(k); }
       catch (e) { storageOverrides.set(k, null); }
     },
   };
@@ -189,7 +189,7 @@ function installJava(rt, java, screen, ctx) {
   try {
     for (let i = localStorage.length - 1; i >= 0; i--) {
       const key = localStorage.key(i);
-      if (key && key.startsWith('kns:file:') && key.includes('_hubgamefriend.dat')) localStorage.removeItem(key);
+      if (key && key.startsWith('knsclassic:file:') && key.includes('_hubgamefriend.dat')) localStorage.removeItem(key);
     }
   } catch (e) { /* no storage: nothing is cached either */ }
   const u8s = b => utf8d.decode(new Uint8Array(b.buffer, b.byteOffset, b.length));

@@ -60,9 +60,10 @@ try {
 
     # Public checks through the host's proxy and TLS; these reads create no accounts.
     $page = Invoke-WebRequest -UseBasicParsing -Uri $publicUrl -TimeoutSec 30
+    $remoteBytes = $page.RawContentStream.ToArray()
+    $localBytes = [IO.File]::ReadAllBytes((Join-Path $root 'build\kns-server\web\index.html'))
     if ($page.StatusCode -ne 200 -or $page.Content -notmatch 'KNS_ELF') { throw "Public check failed: $publicUrl" }
-    $local = [IO.File]::ReadAllText((Join-Path $root 'build\kns-server\web\index.html'))
-    if ($page.Content -ne $local) { throw 'The public game page differs from the package. Check proxy caching.' }
+    if ($remoteBytes.Length -ne $localBytes.Length -or [System.Linq.Enumerable]::SequenceEqual($remoteBytes, $localBytes) -ne $true) { throw 'The public game page differs from the package. Check proxy caching.' }
     $studio = Invoke-WebRequest -UseBasicParsing -Uri ($publicUrl + 'studio') -TimeoutSec 30
     if ($studio.StatusCode -ne 200) { throw 'Public Studio check failed.' }
     $status = $null
@@ -73,6 +74,6 @@ try {
     exit 0
 } catch {
     Write-Error $_ -ErrorAction Continue
-    Write-Host 'Operation failed. Inspect the error and the host journal (journalctl -u kns-server); do not assume deployment succeeded.'
+    Write-Host 'Operation failed. Inspect the error and the host journal (journalctl -u kns-classic-server); do not assume deployment succeeded.'
     exit 1
 }
