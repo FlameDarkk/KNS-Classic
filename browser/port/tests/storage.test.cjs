@@ -3,7 +3,7 @@ const test = require('node:test');
 const { installJava } = require('../java_shim.js');
 test('preferences keep their last value when writes fail but reads still work', () => {
   const previous = global.localStorage;
-  const persisted = new Map([['kns:prop:device', 'old-device']]);
+  const persisted = new Map([['knsclassic:prop:device', 'old-device']]);
   global.localStorage = {
     get length() { return persisted.size; }, key: i => [...persisted.keys()][i],
     getItem: key => persisted.get(key) ?? null,
@@ -56,18 +56,18 @@ function storage() {
 
 test('a save renamed over the real file replaces it and drops the temp copy', () => {
   const ls = storage();
-  ls.stored.set('kns:file:/save.dat', b64('OLD'));
+  ls.stored.set('knsclassic:file:/save.dat', b64('OLD'));
   const { vfs, files, temp } = loadVfs(ls);
   temp('/save.tmp', 'NEW');
   assert.equal(vfs.rename('/save.tmp', '/save.dat'), true);
-  assert.equal(ls.stored.get('kns:file:/save.dat'), b64('NEW'));
-  assert.equal(ls.stored.has('kns:file:/save.tmp'), false);
+  assert.equal(ls.stored.get('knsclassic:file:/save.dat'), b64('NEW'));
+  assert.equal(ls.stored.has('knsclassic:file:/save.tmp'), false);
   assert.equal(files.has('/save.tmp'), false);
   assert.equal(files.get('/save.dat').path, '/save.dat');
 });
 
 test('a nearly full storage frees the temp copy and still stores the renamed save', () => {
-  const key = 'kns:file:/save.dat', tmp = 'kns:file:/save.tmp';
+  const key = 'knsclassic:file:/save.dat', tmp = 'knsclassic:file:/save.tmp';
   const ls = storage();
   ls.stored.set(key, b64('OLD-SAVE-VALUE'));
   const { vfs, logs, temp } = loadVfs(ls);
@@ -88,12 +88,12 @@ test('a nearly full storage frees the temp copy and still stores the renamed sav
 
 test('a refused rename keeps the previous save and says so in the log', () => {
   const ls = storage();
-  ls.stored.set('kns:file:/save.dat', b64('OLD'));
+  ls.stored.set('knsclassic:file:/save.dat', b64('OLD'));
   const { vfs, logs, temp } = loadVfs(ls);
   temp('/save.tmp', 'NEW');
   ls.setItem = () => { throw new Error('QuotaExceededError'); };
   vfs.rename('/save.tmp', '/save.dat');
-  assert.equal(ls.stored.get('kns:file:/save.dat'), b64('OLD'));
+  assert.equal(ls.stored.get('knsclassic:file:/save.dat'), b64('OLD'));
   assert.equal(logs.length, 1);
   assert.match(logs[0], /could not be stored/);
   // Renaming a file onto itself keeps it.
@@ -101,5 +101,5 @@ test('a refused rename keeps the previous save and says so in the log', () => {
   const { vfs: same, temp: tempSame } = loadVfs(ls);
   tempSame('/keep.dat', 'KEEP');
   same.rename('/keep.dat', '/keep.dat');
-  assert.equal(ls.stored.get('kns:file:/keep.dat'), b64('KEEP'));
+  assert.equal(ls.stored.get('knsclassic:file:/keep.dat'), b64('KEEP'));
 });

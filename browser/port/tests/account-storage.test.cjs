@@ -11,7 +11,7 @@ test('failed account storage reports an error without reloading or clearing the 
     addEventListener() {} setAttribute() {} focus() {} remove() {}
   }
   const body = new Element('body');
-  const persisted = new Map([['kns:prop:web_did', 'web-existing-guest'], ['kns:prop:hub_guest_uid', '905123']]);
+  const persisted = new Map([['knsclassic:prop:web_did', 'web-existing-guest'], ['knsclassic:prop:hub_guest_uid', '905123']]);
   const localStorage = {
     getItem: key => persisted.get(key) ?? null,
     setItem() { throw new Error('quota'); },
@@ -29,8 +29,8 @@ test('failed account storage reports an error without reloading or clearing the 
   inputs.find(n => n.name === 'password').value = 'test-password';
   await form.onsubmit({preventDefault() {}});
   assert.equal(reloads, 0);
-  assert.equal(persisted.get('kns:prop:web_did'), 'web-existing-guest');
-  assert.equal(persisted.get('kns:prop:hub_guest_uid'), '905123');
+  assert.equal(persisted.get('knsclassic:prop:web_did'), 'web-existing-guest');
+  assert.equal(persisted.get('knsclassic:prop:hub_guest_uid'), '905123');
   assert.match(nodes.find(n => n.className === 'acct-error').textContent, /Browser storage is unavailable/);
 });
 test('successful login keeps new identity and removes old guest cache', async () => {
@@ -41,7 +41,7 @@ test('successful login keeps new identity and removes old guest cache', async ()
     addEventListener() {} setAttribute() {} focus() {} remove() {}
   }
   const body = new Element('body');
-  const storage = {'kns:prop:web_did': 'web-old', 'kns:prop:hub_guest_uid': '905123', 'kns:file:old': 'cached'};
+  const storage = {'knsclassic:prop:web_did': 'web-old', 'knsclassic:prop:hub_guest_uid': '905123', 'knsclassic:file:old': 'cached'};
   Object.defineProperties(storage, {
     getItem: {value(key) { return this[key] ?? null; }},
     setItem: {value(key, value) { this[key] = String(value); }},
@@ -58,11 +58,11 @@ test('successful login keeps new identity and removes old guest cache', async ()
   nodes.find(n => n.name === 'password').value = 'test-password';
   await form.onsubmit({preventDefault() {}});
   assert.equal(reloads, 1);
-  assert.equal(storage['kns:prop:web_did'], 'web-account');
-  assert.equal(storage['kns:prop:account_id'], 'example');
-  assert.equal(storage['kns:prop:account_guest'], '906123');
-  assert.equal(storage['kns:prop:hub_guest_uid'], undefined);
-  assert.equal(storage['kns:file:old'], undefined);
+  assert.equal(storage['knsclassic:prop:web_did'], 'web-account');
+  assert.equal(storage['knsclassic:prop:account_id'], 'example');
+  assert.equal(storage['knsclassic:prop:account_guest'], '906123');
+  assert.equal(storage['knsclassic:prop:hub_guest_uid'], undefined);
+  assert.equal(storage['knsclassic:file:old'], undefined);
 });
 test('the native save survives sign-out and goes only when another player signs in', async () => {
   class Element {
@@ -72,7 +72,7 @@ test('the native save survives sign-out and goes only when another player signs 
     addEventListener() {} setAttribute() {} focus() {} remove() {}
   }
   const body = new Element('body');
-  const storage = {'kns:prop:web_did': 'web-a', 'kns:file:save': 'guides-done'};
+  const storage = {'knsclassic:prop:web_did': 'web-a', 'knsclassic:file:save': 'guides-done'};
   Object.defineProperties(storage, {
     getItem: {value(key) { return this[key] ?? null; }},
     setItem: {value(key, value) { this[key] = String(value); }},
@@ -92,17 +92,17 @@ test('the native save survives sign-out and goes only when another player signs 
     await form.onsubmit({preventDefault() {}});
   };
   await login();
-  assert.equal(storage['kns:save_owner'], 'web-a');
+  assert.equal(storage['knsclassic:save_owner'], 'web-a');
   context.window.KnsAccount.signOut();
-  assert.equal(storage['kns:prop:web_did'], undefined);
-  assert.equal(storage['kns:file:save'], 'guides-done');
+  assert.equal(storage['knsclassic:prop:web_did'], undefined);
+  assert.equal(storage['knsclassic:file:save'], 'guides-done');
   await login();
-  assert.equal(storage['kns:file:save'], 'guides-done');
+  assert.equal(storage['knsclassic:file:save'], 'guides-done');
   context.window.KnsAccount.signOut();
   did = 'web-b';
   await login();
-  assert.equal(storage['kns:file:save'], undefined);
-  assert.equal(storage['kns:save_owner'], 'web-b');
+  assert.equal(storage['knsclassic:file:save'], undefined);
+  assert.equal(storage['knsclassic:save_owner'], 'web-b');
 });
 
 function harness(storage, fetch) {
@@ -138,41 +138,41 @@ test('login stores the server sign-in token, never the password', async () => {
   await nodes.find(n => n.tagName === 'form').onsubmit({preventDefault() {}});
   const login = h.calls.find(c => c.url.endsWith('/account/login'));
   assert.equal(login.url, 'https://example.test/kns/api/account/login');
-  assert.deepEqual(JSON.parse(storage.kns_session), {token: 'tok-1', login_id: 'example'});
+  assert.deepEqual(JSON.parse(storage.knsclassic_session), {token: 'tok-1', login_id: 'example'});
   assert.ok(!JSON.stringify(storage).includes('secret-password'));
 });
 
 test('a stored sign-in restores the account at start; an expired one signs out', async () => {
-  const live = {kns_session: JSON.stringify({token: 'tok-live', login_id: 'example'})};
+  const live = {knsclassic_session: JSON.stringify({token: 'tok-live', login_id: 'example'})};
   const h = harness(live, async url => url.endsWith('/account/session')
     ? {ok: true, json: async () => ({login_id: 'example', did: 'web-account', guest_uid: '906123', token: 'tok-live'})}
     : {ok: true, json: async () => ({progress_epoch: 0})});
   await h.context.window.KnsAccount.ready;
   assert.deepEqual(h.calls.find(c => c.url.endsWith('/account/session')).body, {token: 'tok-live'});
-  assert.equal(live['kns:prop:web_did'], 'web-account');
-  assert.equal(live['kns:prop:account_id'], 'example');
+  assert.equal(live['knsclassic:prop:web_did'], 'web-account');
+  assert.equal(live['knsclassic:prop:account_id'], 'example');
 
-  const expired = {kns_session: JSON.stringify({token: 'tok-old', login_id: 'example'}), 'kns:prop:account_id': 'example', 'kns:prop:web_did': 'web-account'};
+  const expired = {knsclassic_session: JSON.stringify({token: 'tok-old', login_id: 'example'}), 'knsclassic:prop:account_id': 'example', 'knsclassic:prop:web_did': 'web-account'};
   const e = harness(expired, async url => url.endsWith('/account/session')
     ? {ok: false, status: 401, json: async () => ({error: 'expired', code: 'session_expired'})}
     : {ok: true, json: async () => ({progress_epoch: 0})});
   await e.context.window.KnsAccount.ready;
-  assert.equal(expired.kns_session, undefined);
-  assert.equal(expired['kns:prop:account_id'], undefined);
-  assert.equal(expired['kns:prop:web_did'], undefined);
+  assert.equal(expired.knsclassic_session, undefined);
+  assert.equal(expired['knsclassic:prop:account_id'], undefined);
+  assert.equal(expired['knsclassic:prop:web_did'], undefined);
 });
 
 test('sign-out revokes the token on the server and forgets it', async () => {
-  const storage = {kns_session: JSON.stringify({token: 'tok-out', login_id: 'example'}), 'kns:prop:account_id': 'example'};
+  const storage = {knsclassic_session: JSON.stringify({token: 'tok-out', login_id: 'example'}), 'knsclassic:prop:account_id': 'example'};
   const h = harness(storage, async () => ({ok: true, json: async () => ({})}));
   h.context.window.KnsAccount.signOut();
   assert.deepEqual(h.calls.find(c => c.url.endsWith('/account/logout')).body, {token: 'tok-out'});
-  assert.equal(storage.kns_session, undefined);
-  assert.equal(storage['kns:prop:account_id'], undefined);
+  assert.equal(storage.knsclassic_session, undefined);
+  assert.equal(storage['knsclassic:prop:account_id'], undefined);
 });
 
 test('the signed-in panel changes the password with the stored token', async () => {
-  const storage = {kns_session: JSON.stringify({token: 'tok-pw', login_id: 'example'}), 'kns:prop:account_id': 'example'};
+  const storage = {knsclassic_session: JSON.stringify({token: 'tok-pw', login_id: 'example'}), 'knsclassic:prop:account_id': 'example'};
   const h = harness(storage, async () => ({ok: true, json: async () => ({changed: true})}));
   h.context.window.KnsAccount.open();
   const nodes = h.nodes();

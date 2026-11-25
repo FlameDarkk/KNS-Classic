@@ -157,22 +157,22 @@ test('a refused guest creation is not stored; a login without a result keeps the
 
     reply = { error_code: 7, error_detail: 'busy' };
     hub.asyncRequest('guest/create', '{}', 1, 2); await settle();
-    assert.equal(stored.get('kns:prop:hub_guest_uid'), undefined);
+    assert.equal(stored.get('knsclassic:prop:hub_guest_uid'), undefined);
     assert.deepEqual(callbacks.pop(), { error_code: 7, error_detail: 'busy' });
 
     reply = { error_code: 0 };
     hub.asyncRequest('guest/create', '{}', 1, 2); await settle();
-    assert.equal(stored.get('kns:prop:hub_guest_uid'), undefined);
+    assert.equal(stored.get('knsclassic:prop:hub_guest_uid'), undefined);
     assert.equal(callbacks.pop().error_code, 1);
 
     reply = { error_code: 0, type: 'guest/create', did: 'server-did', guest_uid: '905001' };
     hub.asyncRequest('guest/create', '{}', 1, 2); await settle();
-    assert.equal(stored.get('kns:prop:hub_guest_uid'), '905001');
+    assert.equal(stored.get('knsclassic:prop:hub_guest_uid'), '905001');
     const created = callbacks.pop();
     assert.equal(created.error_code, 0);
     assert.equal(created.guest_uid, '905001');
 
-    stored.set('kns:prop:account_id', 'example');
+    stored.set('knsclassic:prop:account_id', 'example');
     reply = { error_code: 9, error_detail: 'locked' };
     hub.auth(1, 2); await settle();
     assert.deepEqual(callbacks.pop(), { error_code: 9, error_detail: 'locked' });
