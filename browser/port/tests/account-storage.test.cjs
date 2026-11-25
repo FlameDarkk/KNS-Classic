@@ -188,3 +188,30 @@ test('the signed-in panel changes the password with the stored token', async () 
     {token: 'tok-pw', password: 'old-password', new_password: 'new-password-1'});
   assert.equal(nodes.find(n => n.role === 'status').textContent, 'Password changed.');
 });
+
+test('dragging from inside the register popup onto the backdrop does not close it', () => {
+  const h = harness({}, async () => ({ok: true, json: async () => ({})}));
+  let cancelled = 0;
+  h.context.window.KnsAccount.open('register', () => { cancelled++; });
+  const nodes = h.nodes();
+  const backdrop = nodes.find(n => n.className === 'acct-back');
+  const input = nodes.find(n => n.name === 'username');
+
+  // Press inside input, drag outside onto backdrop and release: browser fires click on backdrop.
+  backdrop.onpointerdown({target: input});
+  backdrop.onpointerup({target: backdrop});
+  backdrop.onclick({target: backdrop});
+  assert.equal(cancelled, 0);
+
+  // Press on backdrop, drag into dialog and release: browser fires click on backdrop.
+  backdrop.onpointerdown({target: backdrop});
+  backdrop.onpointerup({target: input});
+  backdrop.onclick({target: backdrop});
+  assert.equal(cancelled, 0);
+
+  // Direct click on backdrop still closes the popup.
+  backdrop.onpointerdown({target: backdrop});
+  backdrop.onpointerup({target: backdrop});
+  backdrop.onclick({target: backdrop});
+  assert.equal(cancelled, 1);
+});

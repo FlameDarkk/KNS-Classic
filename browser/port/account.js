@@ -242,7 +242,18 @@ const open = (mode = 'login', cancelled = null, done = null) => {
   onDone = done;
   const account = get('account_id');
   const content = account ? { form: openSignedIn(account), focus() {} } : openForm(mode);
-  panel = el('div', { className: 'acct-back', onclick: e => { if (e.target === panel) close(); } },
+  let backdropDown = false;
+  panel = el('div', {
+    className: 'acct-back',
+    onpointerdown: e => { backdropDown = e.target === panel; },
+    onpointerup: e => { if (e.target !== panel) backdropDown = false; },
+    onpointercancel: () => { backdropDown = false; },
+    onclick: e => {
+      const shouldClose = backdropDown && e.target === panel;
+      backdropDown = false;
+      if (shouldClose) close();
+    },
+  },
     el('div', { className: 'acct-panel', role: 'dialog', ariaLabel: 'Account' }, content.form));
   panel.addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Escape') close(); });
   document.body.appendChild(panel);
